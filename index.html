@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-7p5wBCuZIm0PxdXPQBSH9WUvWY1RH38nrzchlHtcA30='; style-src 'sha256-H/VV+Arr5U9Sk2F0MHjZx0Wa/vrfYJtvsBjuFWm8j5k='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-v+opf4Cngy7JBAL8jR4QNMhQV8yOh3g9HdR8PI+ISN8='; style-src 'sha256-H/VV+Arr5U9Sk2F0MHjZx0Wa/vrfYJtvsBjuFWm8j5k='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Asset Vault</title>
 <style>
 :root { color-scheme: light; font: 16px/1.55 system-ui, sans-serif; color: #242722; background: #f4f4ed; --ink: #234d3e; --line: #d5d9ce; }
@@ -79,8 +79,8 @@ th:first-child, td:first-child { text-align: left; }
 <p id="strength" class="hint">Use at least 20 characters. Six randomly chosen words are a good starting point. There is no password recovery.</p>
 <div class="actions"><button id="unlockButton" class="primary"></button></div>
 </form>
-<div class="actions"><button type="button" id="retry">Reload vault</button></div>
 </section>
+<div class="actions" id="reloadActions" hidden><button type="button" id="retry">Reload vault</button></div>
 <div id="workspace" hidden>
 <section id="dashboard">
 <h2>Portfolio value</h2>
@@ -1175,6 +1175,7 @@ function renderAssets() {
 function showWorkspace() {
   $('gate').hidden = Boolean(active) || (!candidate && !canCreate);
   $('workspace').hidden = !active;
+  $('reloadActions').hidden = Boolean(active);
   $('gateTitle').textContent = candidate ? 'Unlock vault' : 'Create a vault';
   $('unlockButton').textContent = candidate ? 'Unlock' : 'Create vault';
   $('repeatLabel').hidden = Boolean(candidate);
@@ -1223,7 +1224,12 @@ async function load() {
     canCreate = true;
   }
   const error = remoteError || localError;
-  status(error ? error.message : '', Boolean(error));
+  let message = error?.message ?? '';
+  if (remoteError && !candidate && !canCreate) {
+    message += repo ? ' Retry or check the repository and branch under GitHub connection.' :
+      ' Retry or use GitHub connection to load the vault directly from your repository.';
+  }
+  status(message, Boolean(error));
   showWorkspace();
 }
 
