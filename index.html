@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-7gpOCiV/wVoSRn4WoDP7H05HiyjdrzPV09eJuL2jfXw='; style-src 'sha256-t1tSWyd4UdeXqrTVutYTjHfwM3h2qKhRz0XcGAw/sAI='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-XQ1z5h6aYtArwpz3qPFDu6B0D4LVUPtVE4CAp8vcKYo='; style-src 'sha256-0nBbaDCpdFZp2UmuAGH0mvpUxEJtmrYhUOi6I2wNUWU='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Asset Vault</title>
 <style>
 :root { color-scheme: light; font: 16px/1.55 system-ui, sans-serif; color: #242722; background: #f4f4ed; --ink: #234d3e; --line: #d5d9ce; }
 * { box-sizing: border-box; }
 #controls { border: 0; padding: 0; margin: 0; min-width: 0; }
 [hidden] { display: none !important; }
-main { width: min(100% - 2rem, 44rem); margin: 3rem auto; }
+main { width: min(100% - 2rem, 76rem); margin: clamp(1.5rem, 4vw, 3rem) auto; }
 h1, h2 { line-height: 1.15; letter-spacing: -.035em; }
 h1 { font-size: clamp(2.5rem, 8vw, 4rem); margin: 0; }
 h2 { font-size: 1.4rem; margin: 0 0 .8rem; }
@@ -56,7 +56,7 @@ th:first-child, td:first-child { text-align: left; }
 .stock-stats .gain { color: #17663d; }
 .stock-stats .loss { color: #9a3c2c; }
 @media (max-width: 580px) { .stock-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.portfolio-tabs { display: flex; gap: .5rem; margin: 1rem 0; }
+.portfolio-tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
 .portfolio-tabs [aria-selected="true"] { background: var(--ink); color: #fff; }
 #allStockRows article { border-top: 1px solid var(--line); padding: .8rem 0; }
 #allStockRows h3 { margin: 0; }
@@ -70,6 +70,17 @@ th:first-child, td:first-child { text-align: left; }
 .chart-legend { list-style:none; padding:0; display:flex; flex-wrap:wrap; gap:.4rem 1rem; font-size:.875rem; }
 .chart-legend svg { width:.75rem; height:.75rem; margin-right:.4rem; }
 @media(max-width:640px){ .chart-grid { grid-template-columns:1fr; } }
+.chart-date-controls { display:flex; flex-wrap:wrap; gap:.5rem 1rem; margin:.8rem 0; }
+.chart-date-controls label { display:grid; gap:.25rem; flex:0 1 10rem; min-width:0; }
+.chart-date-controls :is(input,select) { width:100%; }
+#assetEditor { scroll-margin-top: 1rem; }
+@media (min-width: 850px) {
+  #records, #editor, #stockFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem 1.5rem; }
+  #records { align-items: start; }
+  #editor > :is(.actions, #stockFields, #notesLabel, .hint), #stockFields > .hint { grid-column: 1 / -1; }
+  .asset-category { min-width: 0; }
+  #rateForm { display: flex; align-items: end; flex-wrap: wrap; gap: .65rem; }
+}
 </style>
 </head>
 <body>
@@ -97,35 +108,11 @@ th:first-child, td:first-child { text-align: left; }
 <div><span>Combined in USD</span><strong id="totalUSD">—</strong></div>
 </div>
 <p id="nativeTotals" class="hint"></p>
+<p class="hint">Portfolio totals are in full currency units. Account balances are entered in thousands.</p>
 <p id="gainTotals" class="hint"></p><p id="fxStatus" class="hint"></p>
 <form id="rateForm">
 <label>Fallback exchange rate · ILS per 1 USD <input id="rate" type="number" inputmode="decimal" step="any" min="0.000001" max="10000" required placeholder="e.g. 3.65"></label>
 <div class="actions"><button type="submit">Save exchange rate</button></div>
-</form>
-</section>
-<section id="assetEditor">
-<h2 id="editHeading">Add an asset</h2>
-<form id="editor">
-<label>Asset type <select id="kind">
-<option value="bank">Bank account</option><option value="cash">Cash balance</option><option value="savings">Savings account</option><option value="pension">Pension fund</option><option value="education">Education fund</option><option value="land">Land investment</option>
-<option value="brokerage">Brokerage account</option><option value="reported">Reported brokerage value</option><option value="stock">Stock or ETF</option>
-</select></label>
-<label id="parentLabel" hidden>Brokerage account <select id="parent"></select></label>
-<label><span id="nameLabel">Account name</span> <input id="title" required maxlength="200" autocomplete="off"></label>
-<label id="currencyLabel">Currency <select id="currency"><option value="ILS">ILS · Israeli shekel</option><option value="USD">USD · US dollar</option></select></label>
-<label id="assetClassLabel">Asset class <select id="assetClass"></select></label>
-<label id="amountLabel"><span id="amountCaption">Latest balance</span> <input id="amount" type="number" inputmode="decimal" step="any" max="1000000000000" min="-1000000000000"></label>
-<div id="stockFields" hidden>
-<label>Shares <input id="shares" type="number" inputmode="decimal" step="any" min="0.00000001" max="1000000000"></label>
-<label>Manual fallback price per share (optional with a symbol) <input id="price" type="number" inputmode="decimal" step="any" min="0" max="1000000000"></label>
-<label>Average cost per share (optional) <input id="cost" type="number" inputmode="decimal" step="any" min="0" max="1000000000"></label>
-<label>Market data symbol (optional) <input id="symbol" autocomplete="off" maxlength="40" placeholder="e.g. AAPL"></label>
-<label>Exchange MIC (optional) <input id="exchange" autocomplete="off" maxlength="4" placeholder="e.g. XTAE for Tel Aviv"></label>
-<label>Provider quote unit <select id="quoteUnit"><option value="1">Selected currency</option><option value="100">Agorot (divide by 100)</option></select></label>
-<p class="hint">Enter prices and costs in the selected currency. Divide TASE quotes in agorot by 100 to enter them in ILS.</p>
-</div>
-<label id="notesLabel" hidden>Notes <textarea id="notes" maxlength="20000" autocomplete="off"></textarea></label>
-<div class="actions"><button class="primary" id="saveAsset">Save asset</button><button type="button" id="cancelEdit" hidden>Cancel edit</button></div>
 </form>
 </section>
 <div class="portfolio-tabs" role="tablist" aria-label="Portfolio views">
@@ -146,6 +133,12 @@ th:first-child, td:first-child { text-align: left; }
 </form>
 </details>
 <p class="hint">Value in ILS. Uses recorded balances and available market prices.</p>
+<div class="chart-date-controls" role="group" aria-label="Chart date range">
+<label>Range <select id="chartRange"><option value="all">All history</option><option value="90">Last 90 days</option><option value="365">Last year</option><option value="1095">Last 3 years</option><option value="custom">Custom dates</option></select></label>
+<label>From <input id="chartFrom" type="date"></label>
+<label>To <input id="chartTo" type="date"></label>
+</div>
+<p id="chartRangeNote" class="hint" role="status"></p>
 <div id="growthChart"></div>
 <div class="chart-grid">
 <section><h3>Allocation by asset</h3><div id="assetPie"></div></section>
@@ -154,6 +147,31 @@ th:first-child, td:first-child { text-align: left; }
 </section>
 <section id="allStocks" role="tabpanel" aria-labelledby="allStocksTab" hidden><h2>Consolidated holdings</h2><div id="allStockRows"></div></section>
 <section id="accounts" role="tabpanel" aria-labelledby="accountsTab"><h2>Accounts and holdings</h2><div id="records"></div>
+<section id="assetEditor">
+<h2 id="editHeading">Add an asset</h2>
+<form id="editor">
+<label>Asset type <select id="kind">
+<option value="bank">Bank account</option><option value="cash">Cash balance</option><option value="savings">Savings account</option><option value="pension">Pension fund</option><option value="education">Education fund</option><option value="land">Land investment</option>
+<option value="brokerage">Brokerage account</option><option value="reported">Reported brokerage value</option><option value="stock">Stock or ETF</option>
+</select></label>
+<label id="parentLabel" hidden>Brokerage account <select id="parent"></select></label>
+<label><span id="nameLabel">Account name</span> <input id="title" required maxlength="200" autocomplete="off"></label>
+<label id="currencyLabel">Currency <select id="currency"><option value="ILS">ILS · Israeli shekel</option><option value="USD">USD · US dollar</option></select></label>
+<label id="assetClassLabel">Asset class <select id="assetClass"></select></label>
+<label id="amountLabel"><span id="amountCaption">Latest balance</span> (in thousands) <input id="amount" type="number" inputmode="decimal" step="any" max="1000000000000" min="-1000000000000"></label>
+<div id="stockFields" hidden>
+<label>Shares <input id="shares" type="number" inputmode="decimal" step="any" min="0.00000001" max="1000000000"></label>
+<label>Manual fallback price per share (optional with a symbol) <input id="price" type="number" inputmode="decimal" step="any" min="0" max="1000000000"></label>
+<label>Average cost per share (optional) <input id="cost" type="number" inputmode="decimal" step="any" min="0" max="1000000000"></label>
+<label>Market data symbol (optional) <input id="symbol" autocomplete="off" maxlength="40" placeholder="e.g. AAPL"></label>
+<label>Exchange MIC (optional) <input id="exchange" autocomplete="off" maxlength="4" placeholder="e.g. XTAE for Tel Aviv"></label>
+<label>Provider quote unit <select id="quoteUnit"><option value="1">Selected currency</option><option value="100">Agorot (divide by 100)</option></select></label>
+<p class="hint">Enter prices and costs in the selected currency. Divide TASE quotes in agorot by 100 to enter them in ILS.</p>
+</div>
+<label id="notesLabel" hidden>Notes <textarea id="notes" maxlength="20000" autocomplete="off"></textarea></label>
+<div class="actions"><button class="primary" id="saveAsset">Save asset</button><button type="button" id="cancelEdit" hidden>Cancel edit</button></div>
+</form>
+</section>
 </section>
 <div class="actions"><button id="sync" type="button">Sync now</button><button id="lock" type="button">Lock</button></div>
 
@@ -1004,14 +1022,14 @@ function currentValue(data) {
   return data.kind === 'stock' ? (data.price === null ? null : data.shares * data.price) : data.amount;
 }
 
-function portfolioSummary(entries) {
+function portfolioSummary(entries, balanceScale = 1) {
   const totals = Object.fromEntries(currencyCodes.map((code) => [code, { value: 0, cost: 0, gain: 0, count: 0, missing: 0, unpriced: 0 }]));
   for (const { data } of entries) {
     if (!data?.currency) continue;
     const total = totals[data.currency];
     const value = currentValue(data);
     if (value === null) { total.unpriced++; continue; }
-    total.value += value;
+    total.value += data.kind === 'stock' ? value : value * balanceScale;
     if (data.kind !== 'stock') continue;
     if (data.cost === null) {
       total.missing++;
@@ -1269,7 +1287,61 @@ function allocationChart(target, result) {
       .filter(Boolean).join(' · '), 'hint'));
 }
 
-function historyChart(rows, breakdown) {
+let chartSeries = null;
+let customChartRange = {};
+
+function showChartRange(rows, breakdown) {
+  chartSeries = { rows, breakdown };
+  drawChartRange();
+}
+
+function drawChartRange() {
+  if (!chartSeries) return;
+  const {rows, breakdown} = chartSeries;
+  const earliest = rows[0]?.date ?? '';
+  const latest = rows.at(-1)?.date ?? '';
+  const select = $('chartRange');
+  const from = $('chartFrom');
+  const to = $('chartTo');
+  const note = $('chartRangeNote');
+  const preset = Number(select.value);
+  for (const input of [from,to]) {
+    input.min = earliest;
+    input.max = latest;
+    input.disabled = !rows.length;
+  }
+  const limit = (date) => date < earliest ? earliest : date > latest ? latest : date;
+  if (select.value === 'custom') {
+    from.value = limit(customChartRange.from || earliest);
+    to.value = limit(customChartRange.to || latest);
+  } else {
+    from.value = preset && latest ? limit(daysBefore(latest,preset-1)) : earliest;
+    to.value = latest;
+  }
+  if (from.value > to.value) {
+    $('growthChart').replaceChildren();
+    note.textContent = 'Choose an end date on or after the start date.';
+    return;
+  }
+  const visible = rows.filter(({date}) => date >= from.value && date <= to.value);
+  note.textContent = earliest && visible.length < 2 ? 'This range needs at least two recorded points. Try wider dates.' : '';
+  historyChart(visible, breakdown, from.value, to.value);
+}
+
+$('chartRange').addEventListener('change', () => {
+  if ($('chartRange').value === 'custom') {
+    customChartRange = {from:$('chartFrom').value, to:$('chartTo').value};
+  }
+  drawChartRange();
+});
+
+for (const id of ['chartFrom','chartTo']) $(id).addEventListener('change', () => {
+  $('chartRange').value = 'custom';
+  customChartRange = {from:$('chartFrom').value, to:$('chartTo').value};
+  drawChartRange();
+});
+
+function historyChart(rows, breakdown, from, to) {
   const target = $('growthChart');
   target.replaceChildren();
   if (rows.length < 2) {
@@ -1278,8 +1350,8 @@ function historyChart(rows, breakdown) {
   }
   const keys = new Map();
   for (const {groups} of rows) for (const [id, {label}] of groups) keys.set(id,label);
-  const start = Date.parse(rows[0].date);
-  const span = Date.parse(rows.at(-1).date) - start;
+  const start = Date.parse(from);
+  const span = Date.parse(to) - start;
   const positive = rows.map(() => 0);
   const negative = rows.map(() => 0);
   const layers = [];
@@ -1315,8 +1387,14 @@ function historyChart(rows, breakdown) {
     shape.append(svgNode('title',{},label));
     svg.append(shape);
   }
-  const indices = new Set(Array.from({length:4},(_,i)=>Math.round((rows.length-1)*i/3)));
-  for (const i of indices) svg.append(svgNode('text',{x:x(i),y:286,'text-anchor':i===0?'start':i===rows.length-1?'end':'middle'},chartDate.format(Date.parse(rows[i].date))));
+  const tickCount = span < 7 * 86400000 ? 2 : 4;
+  const tickFormat = span < 120 * 86400000 ?
+    new Intl.DateTimeFormat('en', {month:'short', day:'numeric', timeZone:'UTC'}) : chartDate;
+  for (let i = 0; i < tickCount; i++) {
+    const fraction = i / (tickCount - 1);
+    const anchor = i === 0 ? 'start' : i === tickCount - 1 ? 'end' : 'middle';
+    svg.append(svgNode('text',{x:66 + 714*fraction,y:286,'text-anchor':anchor},tickFormat.format(start + span*fraction)));
+  }
   target.append(svg, chartLegend(layers));
   if (rows.some(({missing})=>missing)) target.append(element('p','Some dates are partial because prices or exchange rates are missing.','hint'));
 }
@@ -1350,7 +1428,7 @@ function renderCharts() {
   if (mode === 'imported') {
     const rows = imported.sort((a,b)=>a.date.localeCompare(b.date))
       .map(({date,total})=>({date,groups:new Map([['total',{label:'Workbook total',value:total}]])}));
-    historyChart(rows,'Workbook total');
+    showChartRange(rows,'Workbook total');
     return;
   }
   const today = day();
@@ -1368,7 +1446,7 @@ function renderCharts() {
     const historicalRate=lastClose(fx,date)?.[1] || history.get(rateId)?.findLast((mark)=>mark.date<=date)?.state?.rate;
     return {date,...valuedGroups(positions,titles,mode,market,isToday?rate:historicalRate,isToday?undefined:date,classLabels)};
   });
-  historyChart(rows, mode==='classes'?'Asset classes':'Individual assets');
+  showChartRange(rows, mode==='classes'?'Asset classes':'Individual assets');
 }
 
 $('chartBreakdown').addEventListener('change',renderCharts);
@@ -1430,7 +1508,7 @@ function renderAssets() {
   const brokerages = all.filter(({ data }) => data?.kind === 'brokerage');
   const ids = new Set(brokerages.map(({ record }) => record.id));
   const eligible = all.filter(({ data }) => !['rate', 'market', 'snapshot', 'portfolio-history', 'asset-class'].includes(data?.kind));
-  const totals = portfolioSummary(eligible);
+  const totals = portfolioSummary(eligible, 1000);
   const manualRate = all.find(({ record, data }) => record.id === rateId && data?.kind === 'rate')?.data.rate;
   const marketRate = market.get(listingKey(fxListing));
   const rate = marketRate?.quote || manualRate;
@@ -1438,8 +1516,8 @@ function renderAssets() {
     manualRate ? 'USD/ILS · Manual rate' : '';
   const ils = totals.ILS.value;
   const usd = totals.USD.value;
-  $('totalILS').textContent = rate ? money.ILS.format(ils + usd * rate) : '—';
-  $('totalUSD').textContent = rate ? money.USD.format(usd + ils / rate) : '—';
+  $('totalILS').textContent = rate ? money.ILS.format(ils + usd * rate) : usd === 0 ? money.ILS.format(ils) : '—';
+  $('totalUSD').textContent = rate ? money.USD.format(usd + ils / rate) : ils === 0 ? money.USD.format(usd) : '—';
   $('nativeTotals').textContent = 'By currency · ' + money.ILS.format(ils) + ' · ' + money.USD.format(usd) +
     (rate ? '' : ' · Add an exchange rate for combined totals.') +
     (totals.ILS.unpriced + totals.USD.unpriced ? ' · Partial totals. Some holdings have no quote.' : '');
@@ -1497,7 +1575,11 @@ function showWorkspace() {
   $('branch').readOnly = Boolean(active);
   if (!active) {
     $('records').replaceChildren();
-    for (const id of ['growthChart','assetPie','classPie']) $(id).replaceChildren();
+    for (const id of ['growthChart','assetPie','classPie','chartRangeNote']) $(id).replaceChildren();
+    chartSeries = null;
+    customChartRange = {};
+    $('chartRange').value = 'all';
+    $('chartFrom').value = $('chartTo').value = '';
     $('classToManage').replaceChildren();
     $('className').value = '';
     $('classStatus').textContent = '';
