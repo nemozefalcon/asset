@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-v+opf4Cngy7JBAL8jR4QNMhQV8yOh3g9HdR8PI+ISN8='; style-src 'sha256-H/VV+Arr5U9Sk2F0MHjZx0Wa/vrfYJtvsBjuFWm8j5k='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-u50TrBuJ15vzLR04kTW300JzZ2I3Qw3QMbjH0xmq4lY='; style-src 'sha256-t1tSWyd4UdeXqrTVutYTjHfwM3h2qKhRz0XcGAw/sAI='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Asset Vault</title>
 <style>
 :root { color-scheme: light; font: 16px/1.55 system-ui, sans-serif; color: #242722; background: #f4f4ed; --ink: #234d3e; --line: #d5d9ce; }
@@ -62,6 +62,14 @@ th:first-child, td:first-child { text-align: left; }
 #allStockRows h3 { margin: 0; }
 .position-breakdown { margin: .5rem 0 0; padding: .4rem .65rem; background: #f7f8f4; }
 .position-breakdown p { margin: .35rem 0; }
+.chart-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.chart-grid section { min-width:0; }
+.growth-svg { width:100%; height:auto; display:block; }
+.growth-svg text { font-size:12px; fill:currentColor; }
+.allocation-pie { width:min(100%,12rem); height:auto; display:block; margin:auto; }
+.chart-legend { list-style:none; padding:0; display:flex; flex-wrap:wrap; gap:.4rem 1rem; font-size:.875rem; }
+.chart-legend svg { width:.75rem; height:.75rem; margin-right:.4rem; }
+@media(max-width:640px){ .chart-grid { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -100,11 +108,12 @@ th:first-child, td:first-child { text-align: left; }
 <form id="editor">
 <label>Asset type <select id="kind">
 <option value="bank">Bank account</option><option value="cash">Cash balance</option><option value="savings">Savings account</option><option value="pension">Pension fund</option><option value="education">Education fund</option><option value="land">Land investment</option>
-<option value="brokerage">Brokerage account</option><option value="stock">Stock or ETF</option>
+<option value="brokerage">Brokerage account</option><option value="reported">Reported brokerage value</option><option value="stock">Stock or ETF</option>
 </select></label>
 <label id="parentLabel" hidden>Brokerage account <select id="parent"></select></label>
 <label><span id="nameLabel">Account name</span> <input id="title" required maxlength="200" autocomplete="off"></label>
 <label id="currencyLabel">Currency <select id="currency"><option value="ILS">ILS · Israeli shekel</option><option value="USD">USD · US dollar</option></select></label>
+<label id="assetClassLabel">Asset class <select id="assetClass"></select></label>
 <label id="amountLabel"><span id="amountCaption">Latest balance</span> <input id="amount" type="number" inputmode="decimal" step="any" max="1000000000000" min="-1000000000000"></label>
 <div id="stockFields" hidden>
 <label>Shares <input id="shares" type="number" inputmode="decimal" step="any" min="0.00000001" max="1000000000"></label>
@@ -122,7 +131,27 @@ th:first-child, td:first-child { text-align: left; }
 <div class="portfolio-tabs" role="tablist" aria-label="Portfolio views">
 <button id="accountsTab" type="button" role="tab" aria-selected="true" aria-controls="accounts">Accounts</button>
 <button id="allStocksTab" type="button" role="tab" aria-selected="false" aria-controls="allStocks" tabindex="-1">All stocks</button>
+<button id="chartsTab" type="button" role="tab" aria-selected="false" aria-controls="charts" tabindex="-1">Charts</button>
 </div>
+<section id="charts" role="tabpanel" aria-labelledby="chartsTab" hidden>
+<h2>Portfolio over time</h2>
+<label>Stack by <select id="chartBreakdown"><option value="classes">Asset class</option><option value="assets">Individual asset</option><option value="imported" hidden>Workbook total</option></select></label>
+<details>
+<summary>Manage asset classes</summary>
+<form id="classForm">
+<label>Class <select id="classToManage"></select></label>
+<label>Class name <input id="className" type="text" maxlength="60" required></label>
+<div class="actions"><button type="submit">Save class</button></div>
+<p id="classStatus" role="status"></p>
+</form>
+</details>
+<p class="hint">Value in ILS. Uses recorded balances and available market prices.</p>
+<div id="growthChart"></div>
+<div class="chart-grid">
+<section><h3>Allocation by asset</h3><div id="assetPie"></div></section>
+<section><h3>Allocation by class</h3><div id="classPie"></div></section>
+</div>
+</section>
 <section id="allStocks" role="tabpanel" aria-labelledby="allStocksTab" hidden><h2>Consolidated holdings</h2><div id="allStockRows"></div></section>
 <section id="accounts" role="tabpanel" aria-labelledby="accountsTab"><h2>Accounts and holdings</h2><div id="records"></div>
 </section>
@@ -469,7 +498,7 @@ function checkPassphrase(password, repeated) {
 
 const assetPrefix = 'Asset Vault v1\n';
 const rateId = '00000000-0000-4000-8000-000000000001';
-const balanceKinds = new Set(['bank', 'cash', 'savings', 'pension', 'education', 'land']);
+const balanceKinds = new Set(['bank', 'cash', 'savings', 'pension', 'education', 'land', 'reported']);
 const accountKinds = new Set([...balanceKinds, 'brokerage', 'stock']);
 const currencyCodes = ['ILS', 'USD'];
 const openBrokers = new Set();
@@ -561,7 +590,7 @@ async function withHistory(records, previous) {
     const data = assetData(record);
     const prior = old && assetData(old);
     if (!trackable(data) && !trackable(prior)) continue;
-    if (old === record && snapshots.has(record.id)) continue;
+    if (snapshots.has(record.id) && (old === record || (!old && isDay(data?.importDate)))) continue;
     const saveMark = async (date, state) => {
       const id = await namedId('asset-history:' + record.id + ':' + date);
       return assetRecord(id, record.deleted ? old.title : record.title, { kind: 'snapshot', assetId: record.id, date, state });
@@ -717,8 +746,9 @@ function portfolioHistory(history, market, selected) {
   const entity = selected && history.get(selected);
   const markets = market.get(listingKey(fxListing));
   const states = entity ? [entity] : [...history.values()];
-  for (let i = 0; i < historyDays; i++) {
-    const date = daysBefore(last, i);
+  const dates = Array.from({ length: historyDays }, (_, i) => daysBefore(last, i));
+  if (entity) dates.push(...new Set(entity.map(({ date }) => date).filter((date) => date < dates.at(-1))));
+  for (const date of dates.sort((a, b) => b.localeCompare(a))) {
     const totals = { ILS: 0, USD: 0 };
     let missing = 0;
     let closePrice;
@@ -765,9 +795,7 @@ function renderImportedHistory(rows) {
   $('historyTable').replaceChildren(table);
 }
 
-function renderHistory(market) {
-  const select = $('historyAsset');
-  const selected = select.value;
+function recordedHistory() {
   const history = new Map();
   const titles = new Map();
   for (const record of active.records) {
@@ -786,6 +814,13 @@ function renderHistory(market) {
     } else if (trackable(data)) titles.set(record.id, record.title);
   }
   for (const records of history.values()) records.sort((a, b) => a.date.localeCompare(b.date));
+  return { history, titles };
+}
+
+function renderHistory(market) {
+  const select = $('historyAsset');
+  const selected = select.value;
+  const { history, titles } = recordedHistory();
   select.replaceChildren(new Option('Entire portfolio', ''), ...Array.from(titles)
     .filter(([id]) => id !== rateId).map(([id, title]) => new Option(title, id)));
   const imported = active.records.map(assetData).filter((data) => data?.kind === 'portfolio-history');
@@ -798,7 +833,7 @@ function renderHistory(market) {
   }
   const rows = portfolioHistory(history, market, select.value);
   const showClose = Boolean(select.value && history.get(select.value)?.some((mark) => mark.state?.symbol));
-  $('historyHint').textContent = 'Up to 90 days through yesterday. Uses recorded positions, daily closes where available, and the most recent known balances. Missing prices leave totals partial.';
+  $('historyHint').textContent = 'Daily values for up to 90 days through yesterday. Individual assets also show older recorded dates. Uses recorded positions, daily closes where available, and the most recent known balances. Missing prices leave totals partial.';
   if (!rows.length) {
     $('historyTable').textContent = 'History appears after the first recorded day ends.';
     return;
@@ -833,6 +868,13 @@ function isNumber(value, min, max) {
 function assetData(record) {
   if (record.deleted || !record.notes.startsWith(assetPrefix)) return null;
   const data = parseJSON(record.notes.slice(assetPrefix.length), 'Asset');
+  if (data?.kind === 'asset-class') {
+    if (!validClassId(data.classId) || record.title.length > 60 || !record.title.trim()) {
+      throw new FormatError('Invalid asset class definition.');
+    }
+    return data;
+  }
+  if (data?.assetClass !== undefined && !validClassId(data.assetClass)) throw new FormatError('Invalid asset class.');
   if (validateHistoryData(data)) return data;
   if (data?.kind === 'rate' && isNumber(data.rate, 0.000001, 10000)) return data;
   if (!accountKinds.has(data?.kind) || !(data.parent === null || typeof data.parent === 'string')) {
@@ -844,7 +886,7 @@ function assetData(record) {
         (isNumber(data.price, 0, 1e9) || (data.price === null && data.symbol)) && (data.cost === null || isNumber(data.cost, 0, 1e9)) &&
         (data.previousPrice === undefined || isNumber(data.previousPrice, 0, 1e9)) &&
         (data.symbol === undefined || validListing(data))) return data;
-    if ((data.kind === 'cash' || (balanceKinds.has(data.kind) && data.parent === null)) &&
+    if ((data.kind === 'cash' || (data.kind === 'reported' ? typeof data.parent === 'string' : balanceKinds.has(data.kind) && data.parent === null)) &&
         isNumber(data.amount, -1e12, 1e12)) return data;
   }
   throw new FormatError('Invalid asset values.');
@@ -863,19 +905,28 @@ function brokerageRecords() {
 function syncEditor() {
   const kind = $('kind').value;
   const parent = $('parent').value;
-  const linked = kind === 'stock' || kind === 'cash';
+  const linked = ['stock', 'cash', 'reported'].includes(kind);
   $('parent').replaceChildren(new Option('Standalone account', ''), ...brokerageRecords().map(
     (record) => new Option(record.title, record.id)
   ));
   $('parent').value = [...$('parent').options].some((option) => option.value === parent) ? parent : '';
   $('parentLabel').hidden = !linked;
   $('parent').disabled = !linked;
-  $('parent').required = kind === 'stock';
-  $('parent').options[0].textContent = kind === 'stock' ? 'Select a brokerage' : 'Standalone account';
+  $('parent').required = kind === 'stock' || kind === 'reported';
+  $('parent').options[0].textContent = $('parent').required ? 'Select a brokerage' : 'Standalone account';
   $('nameLabel').textContent = kind === 'stock' ? 'Ticker or fund name' : kind === 'cash' && $('parent').value ? 'Cash label' : 'Account name';
   $('currencyLabel').hidden = kind === 'brokerage' || kind === 'note';
   $('currency').disabled = $('currencyLabel').hidden;
   $('amountCaption').textContent = kind === 'land' ? 'Estimated value' : 'Latest balance';
+  $('assetClassLabel').hidden = !balanceKinds.has(kind) && kind !== 'stock';
+  const names = classNames();
+  const selected = $('assetClass').value;
+  $('assetClass').replaceChildren(
+    new Option('Default · ' + (names.get(defaultClass[kind]) ?? names.get('other')), ''),
+    ...[...names].map(([id, label]) => new Option(label, id))
+  );
+  if (selected && !names.has(selected)) $('assetClass').add(new Option('Unresolved class', selected));
+  $('assetClass').value = selected;
   $('amountLabel').hidden = !balanceKinds.has(kind);
   $('amount').disabled = $('amountLabel').hidden;
   $('amount').required = !$('amount').disabled;
@@ -905,6 +956,10 @@ function editAsset(record, kind, parent = '') {
   syncEditor();
   $('parent').value = data?.parent ?? parent;
   if (parent) openBrokers.add(parent);
+  if (data?.assetClass && !classNames().has(data.assetClass)) {
+    $('assetClass').add(new Option('Unresolved class', data.assetClass));
+  }
+  $('assetClass').value = data?.assetClass || '';
   $('title').value = record?.title ?? (kind === 'cash' ? 'Cash' : '');
   $('notes').value = record && !data ? record.notes : '';
   $('currency').value = data?.currency ?? 'ILS';
@@ -1044,28 +1099,278 @@ function renderAllStocks(entries, brokerages) {
   if (!cards.length) $('allStockRows').textContent = 'No stock holdings yet.';
 }
 
+const portfolioTabs = ['accountsTab', 'allStocksTab', 'chartsTab'];
+
 function selectPortfolioTab(tab) {
-  const all = tab === 'allStocksTab';
-  $('accounts').hidden = all;
-  $('assetEditor').hidden = all;
-  $('allStocks').hidden = !all;
-  for (const id of ['accountsTab', 'allStocksTab']) {
+  const accounts = tab === 'accountsTab';
+  $('accounts').hidden = !accounts;
+  $('assetEditor').hidden = !accounts;
+  $('allStocks').hidden = tab !== 'allStocksTab';
+  $('charts').hidden = tab !== 'chartsTab';
+  for (const id of portfolioTabs) {
     $(id).setAttribute('aria-selected', String(id === tab));
     $(id).tabIndex = id === tab ? 0 : -1;
   }
+  if (tab === 'chartsTab') renderCharts();
 }
 
-for (const id of ['accountsTab', 'allStocksTab']) {
+for (const [index,id] of portfolioTabs.entries()) {
   $(id).addEventListener('click', () => selectPortfolioTab(id));
   $(id).addEventListener('keydown', (event) => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const last = portfolioTabs.length - 1;
+    const offsets = { ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: last };
+    if (!Object.hasOwn(offsets,event.key)) return;
     event.preventDefault();
-    const next = event.key === 'Home' ? 'accountsTab' : event.key === 'End' ? 'allStocksTab' :
-      id === 'accountsTab' ? 'allStocksTab' : 'accountsTab';
+    const next = portfolioTabs[(offsets[event.key] + portfolioTabs.length) % portfolioTabs.length];
     selectPortfolioTab(next);
     $(next).focus();
   });
 }
+
+const classes = {
+  cash: 'Cash & bank', savings: 'Savings & provident funds',
+  stock: 'Stocks & ETFs', bonds: 'Bonds & fixed income',
+  pension: 'Pension funds', education: 'Education funds',
+  land: 'Real estate', reported: 'Brokerage totals', other: 'Other'
+};
+function validClassId(id) {
+  return typeof id === 'string' && (Object.hasOwn(classes, id) ||
+    /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id));
+}
+
+function classNames() {
+  const names = new Map(Object.entries(classes));
+  for (const record of active.records) {
+    const data = assetData(record);
+    if (data?.kind === 'asset-class') names.set(data.classId, record.title);
+  }
+  return names;
+}
+
+function fillClassName() {
+  $('className').value = classNames().get($('classToManage').value) || '';
+  $('classStatus').textContent = '';
+}
+
+function renderClassManager(names) {
+  const select = $('classToManage');
+  const current = select.value;
+  select.replaceChildren(new Option('Add a new class', ''),
+    ...[...names].map(([id, label]) => new Option(label, id)));
+  select.value = names.has(current) ? current : '';
+}
+
+$('classToManage').addEventListener('change', fillClassName);
+submit('classForm', async () => {
+  const name = $('className').value.trim();
+  if (!name) { $('classStatus').textContent = 'Enter a class name.'; return; }
+  const existing = $('classToManage').value;
+  const names = classNames();
+  if ([...names].some(([id, label]) => id !== existing && label.toLowerCase() === name.toLowerCase())) {
+    $('classStatus').textContent = 'That class name is already in use.';
+    return;
+  }
+  const classId = existing || crypto.randomUUID();
+  const id = await namedId('asset-class:' + classId);
+  await save(merge(active.records, [assetRecord(id, name, {kind: 'asset-class', classId})]));
+  $('classToManage').value = classId;
+  fillClassName();
+  $('classStatus').textContent = 'Class saved.';
+});
+
+const defaultClass = { bank: 'cash', cash: 'cash', savings: 'savings', stock: 'stock',
+  pension: 'pension', education: 'education', land: 'land', reported: 'reported' };
+const chartColors = ['#166d61','#365a99','#a85336','#755091','#767323','#b24560','#007692','#687881','#a96c1c','#5358a9'];
+const chartDate = new Intl.DateTimeFormat('en', {year:'numeric',month:'short', timeZone:'UTC'});
+const shortILS = new Intl.NumberFormat('en', {notation:'compact', maximumFractionDigits:1});
+
+function svgNode(tag, attributes, label) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+  if (label) node.textContent = label;
+  return node;
+}
+
+function chartLegend(items, percentage = false) {
+  const list = element('ul', undefined, 'chart-legend');
+  for (const { label, value, color, share } of items) {
+    const item = element('li');
+    const key = svgNode('svg', {viewBox:'0 0 12 12', 'aria-hidden':'true'});
+    key.append(svgNode('circle', {cx:6,cy:6,r:5,fill:color}));
+    const text = value === undefined ? '' : ' · ' + money.ILS.format(value);
+    item.append(key, document.createTextNode(label + text + (percentage ? ' · ' + percent.format(share).replace(/^\+/, '') : '')));
+    list.append(item);
+  }
+  return list;
+}
+
+function chartMetadata(id, state, names, mode, classLabels) {
+  const kind = state.assetClass || defaultClass[state.kind] || 'other';
+  if (mode === 'classes') return [kind, classLabels.get(kind) ?? 'Unresolved class'];
+  const name = names.get(id) || id;
+  return [id, state.parent && names.has(state.parent) ? names.get(state.parent) + ' · ' + name : name];
+}
+
+function chartValue(state, market, date) {
+  if (state.kind === 'stock' && state.symbol) {
+    const quote = quotesFor(state, market);
+    if (date) {
+      const close = lastClose(quote, date);
+      return close ? close[1] * state.shares : null;
+    }
+    if (quote) return quote.quote * state.shares;
+  }
+  return currentValue(state);
+}
+
+function valuedGroups(positions, names, mode, market, rate, date, classLabels) {
+  const groups = new Map();
+  let missing = 0;
+  for (const [id, state] of positions) {
+    if (!state?.currency) continue;
+    const amount = chartValue(state, market, date);
+    if (amount === null || (amount !== 0 && state.currency === 'USD' && !rate)) {
+      missing++;
+      continue;
+    }
+    const [key, label] = chartMetadata(id, state, names, mode, classLabels);
+    const value = state.currency === 'USD' ? amount * (rate || 0) : amount;
+    const group = groups.get(key) || {label, value:0};
+    group.value += value;
+    groups.set(key, group);
+  }
+  return {groups, missing};
+}
+
+function allocationChart(target, result) {
+  const entries = [...result.groups.values()].sort((a,b) => b.value - a.value);
+  const omitted = entries.filter(({value}) => value < 0).length;
+  const positive = entries.filter(({value}) => value > 0);
+  const total = positive.reduce((sum, {value}) => sum + value, 0);
+  target.replaceChildren();
+  if (total) {
+    const svg = svgNode('svg', {viewBox:'0 0 140 140', role:'img', 'aria-label':'Current allocation in ILS', class:'allocation-pie'});
+    let offset = 0;
+    const items = positive.map((item, index) => {
+      const share = item.value / total;
+      const color = chartColors[index % chartColors.length];
+      const wedge = svgNode('circle', {cx:70,cy:70,r:49,fill:'none',stroke:color,'stroke-width':34,
+        pathLength:100,'stroke-dasharray':(share*100)+' 100','stroke-dashoffset':-offset,transform:'rotate(-90 70 70)'});
+      wedge.append(svgNode('title', {}, item.label + ' · ' + money.ILS.format(item.value)));
+      svg.append(wedge);
+      offset += share*100;
+      return {...item, color, share};
+    });
+    target.append(svg, chartLegend(items, true));
+  } else target.append(element('p', 'No positive values available.'));
+  if (result.missing || omitted) target.append(element('p',
+    [result.missing ? result.missing + ' unpriced or missing FX' : '', omitted ? omitted + ' negative balances excluded' : '']
+      .filter(Boolean).join(' · '), 'hint'));
+}
+
+function historyChart(rows, breakdown) {
+  const target = $('growthChart');
+  target.replaceChildren();
+  if (rows.length < 2) {
+    target.textContent = 'Record values on at least two dates to see a chart.';
+    return;
+  }
+  const keys = new Map();
+  for (const {groups} of rows) for (const [id, {label}] of groups) keys.set(id,label);
+  const start = Date.parse(rows[0].date);
+  const span = Date.parse(rows.at(-1).date) - start;
+  const positive = rows.map(() => 0);
+  const negative = rows.map(() => 0);
+  const layers = [];
+  for (const [key,label] of keys) {
+    const values = rows.map(({groups}) => groups.get(key)?.value ?? 0);
+    if (!values.some(Boolean)) continue;
+    const color = chartColors[layers.length % chartColors.length];
+    const sides = [positive,negative].map((base,index) => values.map((value,i) => {
+      const from = base[i];
+      base[i] += index === 0 ? Math.max(value,0) : Math.min(value,0);
+      return [from,base[i]];
+    }));
+    layers.push({label,color,sides});
+  }
+  const low = Math.min(...negative);
+  const high = Math.max(...positive);
+  const spread = high - low || 1;
+  const x = (i) => 66 + 714 * (Date.parse(rows[i].date) - start) / span;
+  const y = (value) => 260 - (value-low)*244/spread;
+  const svg = svgNode('svg', {viewBox:'0 0 800 300', role:'img', 'aria-label':breakdown+' over time in ILS', class:'growth-svg'});
+  for (let i=0;i<=4;i++) {
+    const value = low+(high-low)*i/4;
+    const py = y(value);
+    svg.append(svgNode('line',{x1:66,x2:780,y1:py,y2:py,stroke:'#d5dce5'}));
+    svg.append(svgNode('text',{x:59,y:py+4,'text-anchor':'end'},high===low?'0':shortILS.format(value)));
+    if (high===low) break;
+  }
+  for (const {color,sides,label} of layers) for (const side of sides) {
+    if (!side.some(([a,b])=>a!==b)) continue;
+    const top=side.map((pair,i)=>x(i)+','+y(pair[1]));
+    const bottom=side.map((pair,i)=>x(i)+','+y(pair[0])).reverse();
+    const shape=svgNode('polygon',{points:[...top,...bottom].join(' '),fill:color,'fill-opacity':0.9});
+    shape.append(svgNode('title',{},label));
+    svg.append(shape);
+  }
+  const indices = new Set(Array.from({length:4},(_,i)=>Math.round((rows.length-1)*i/3)));
+  for (const i of indices) svg.append(svgNode('text',{x:x(i),y:286,'text-anchor':i===0?'start':i===rows.length-1?'end':'middle'},chartDate.format(Date.parse(rows[i].date))));
+  target.append(svg, chartLegend(layers));
+  if (rows.some(({missing})=>missing)) target.append(element('p','Some dates are partial because prices or exchange rates are missing.','hint'));
+}
+
+function renderCharts() {
+  if (!active) return;
+  const market = getMarketData(active.records);
+  const {history, titles} = recordedHistory();
+  const current = [];
+  const imported = [];
+  let manualRate;
+  for (const record of active.records) {
+    const state = assetData(record);
+    if (!state) continue;
+    titles.set(record.id,record.title);
+    if (state.kind === 'rate') manualRate = state.rate;
+    if (state.kind === 'portfolio-history') imported.push(state);
+    if (trackable(state)) current.push([record.id,state]);
+  }
+  const fx = market.get(listingKey(fxListing));
+  const rate = fx?.quote || manualRate;
+  const classLabels = classNames();
+  renderClassManager(classLabels);
+  allocationChart($('assetPie'), valuedGroups(current,titles,'assets',market,rate,undefined,classLabels));
+  allocationChart($('classPie'), valuedGroups(current,titles,'classes',market,rate,undefined,classLabels));
+  const selector = $('chartBreakdown');
+  const importedOption = selector.querySelector('option[value="imported"]');
+  importedOption.hidden = imported.length < 2;
+  if (selector.value === 'imported' && importedOption.hidden) selector.value = 'classes';
+  const mode = selector.value;
+  if (mode === 'imported') {
+    const rows = imported.sort((a,b)=>a.date.localeCompare(b.date))
+      .map(({date,total})=>({date,groups:new Map([['total',{label:'Workbook total',value:total}]])}));
+    historyChart(rows,'Workbook total');
+    return;
+  }
+  const today = day();
+  const marks = [...history.values()].flat();
+  const earliest = marks.reduce((first,mark)=>mark.date < first ? mark.date : first,today);
+  const dates = new Set(marks.map(({date})=>date).filter((date)=>date<=today));
+  for(let i=0;i<historyDays;i++) {
+    const date=daysBefore(today,i);
+    if (date>=earliest) dates.add(date);
+  }
+  if (current.length) dates.add(today);
+  const rows = [...dates].sort().map((date)=>{
+    const isToday=date===today;
+    const positions=isToday?current:[...history].map(([id,series])=>[id,series.findLast((mark)=>mark.date<=date)?.state]);
+    const historicalRate=lastClose(fx,date)?.[1] || history.get(rateId)?.findLast((mark)=>mark.date<=date)?.state?.rate;
+    return {date,...valuedGroups(positions,titles,mode,market,isToday?rate:historicalRate,isToday?undefined:date,classLabels)};
+  });
+  historyChart(rows, mode==='classes'?'Asset classes':'Individual assets');
+}
+
+$('chartBreakdown').addEventListener('change',renderCharts);
 
 function assetCard({ record, data, quote }) {
   const card = element('article');
@@ -1080,7 +1385,7 @@ function assetCard({ record, data, quote }) {
   } else if (data?.currency) {
     const land = data.kind === 'land';
     card.append(element('p', (land ? 'Value updated ' : 'Balance updated ') + day(record.updatedAt), 'hint'));
-    card.append(element('p', (land ? 'Estimated value' : 'Balance') + ' · ' + money[data.currency].format(currentValue(data))));
+    card.append(element('p', (land ? 'Estimated value' : data.kind === 'reported' ? 'Reported account value' : 'Balance') + ' · ' + money[data.currency].format(currentValue(data))));
   } else {
     card.append(element('p', record.notes));
   }
@@ -1091,6 +1396,9 @@ function assetCard({ record, data, quote }) {
 function brokerageCard({ record }, holdings) {
   const card = element('details', undefined, 'brokerage');
   const totals = portfolioSummary(holdings);
+  if (holdings.some(({ data }) => data.kind === 'reported')) {
+    card.title = 'Remove the reported account value before adding a complete breakdown to avoid double counting.';
+  }
   const balances = currencyCodes.map((code) => money[code].format(totals[code].value)).join(' · ');
   const unpriced = totals.ILS.unpriced + totals.USD.unpriced;
   card.append(element('summary', record.title + ' · ' + balances + (unpriced ? ' · Partial' : '')));
@@ -1099,6 +1407,7 @@ function brokerageCard({ record }, holdings) {
   const group = recordActions(record);
   group.prepend(action('Add stock or ETF', () => editAsset(null, 'stock', record.id)),
     action('Add cash', () => editAsset(null, 'cash', record.id)));
+  if (card.title) card.append(element('p', card.title, 'hint'));
   card.append(group, ...holdings.map(assetCard));
   card.open = openBrokers.has(record.id);
   card.addEventListener('toggle', () => {
@@ -1119,7 +1428,7 @@ function renderAssets() {
   });
   const brokerages = all.filter(({ data }) => data?.kind === 'brokerage');
   const ids = new Set(brokerages.map(({ record }) => record.id));
-  const eligible = all.filter(({ data }) => !['rate', 'market', 'snapshot', 'portfolio-history'].includes(data?.kind));
+  const eligible = all.filter(({ data }) => !['rate', 'market', 'snapshot', 'portfolio-history', 'asset-class'].includes(data?.kind));
   const totals = portfolioSummary(eligible);
   const manualRate = all.find(({ record, data }) => record.id === rateId && data?.kind === 'rate')?.data.rate;
   const marketRate = market.get(listingKey(fxListing));
@@ -1170,6 +1479,7 @@ function renderAssets() {
   renderAllStocks(eligible, brokerages);
   syncEditor();
   renderHistory(market);
+  if (!$('charts').hidden) renderCharts();
 }
 
 function showWorkspace() {
@@ -1186,6 +1496,11 @@ function showWorkspace() {
   $('branch').readOnly = Boolean(active);
   if (!active) {
     $('records').replaceChildren();
+    for (const id of ['growthChart','assetPie','classPie']) $(id).replaceChildren();
+    $('classToManage').replaceChildren();
+    $('className').value = '';
+    $('classStatus').textContent = '';
+    selectPortfolioTab('accountsTab');
     for (const id of ['totalILS', 'totalUSD', 'nativeTotals', 'gainTotals']) $(id).textContent = '';
     $('rateForm').reset();
     clearEditor();
@@ -1408,6 +1723,10 @@ async function importBackup(file) {
   const entries = await Promise.all(records.map(async (record) => {
     const data = assetData(record);
     let id = data?.kind === 'rate' ? rateId : crypto.randomUUID();
+    if (typeof data?.importKey === 'string' && (data.kind === 'brokerage' || balanceKinds.has(data.kind))) {
+      id = await namedId('imported-asset:' + data.importKey);
+    }
+    if (data?.kind === 'asset-class') id = await namedId('asset-class:' + data.classId);
     if (data?.kind === 'portfolio-history') id = await namedId('imported-portfolio-history:' + data.date);
     if (data?.kind === 'market') id = await namedId('market:' + listingKey(data.listing));
     if ((data?.kind === 'brokerage' || trackable(data)) && typeof data.backupId === 'string') {
@@ -1418,17 +1737,24 @@ async function importBackup(file) {
   }));
   const additions = await Promise.all(entries.map(async ({ id, record, data }) => {
     if (!data) return { ...record, id, updatedAt: recordTime(), deleted: false };
+    if (typeof data.importKey === 'string' && active.records.some((item) => item.id === id)) return null;
     if (data.kind === 'brokerage') return assetRecord(id, record.title, { kind: 'brokerage', parent: null });
     if (data.parent && brokerIDs.has(data.parent)) data.parent = brokerIDs.get(data.parent);
     if (data.kind === 'snapshot') {
       if (brokerIDs.has(data.assetId)) data.assetId = brokerIDs.get(data.assetId);
+      if (brokerIDs.has(data.state?.parent)) data.state.parent = brokerIDs.get(data.state.parent);
       id = await namedId('asset-history:' + data.assetId + ':' + data.date);
+      if (data.originalImport && active.records.some((item) => item.id === id)) return null;
     }
     delete data.backupId;
-    return assetRecord(id, record.title, data);
+    const importedRecord = assetRecord(id, record.title, data);
+    if (typeof data.importKey === 'string' && isDay(data.importDate)) {
+      importedRecord.updatedAt = Date.parse(data.importDate + 'T12:00:00Z');
+    }
+    return importedRecord;
   }));
   const imported = new Map();
-  for (const record of additions) imported.set(record.id, record);
+  for (const record of additions.filter(Boolean)) imported.set(record.id, record);
   const combined = merge(active.records, [...imported.values()]);
   await save(combined);
 }
@@ -1472,7 +1798,7 @@ submit('editor', async () => {
     record = { id, title, notes, updatedAt: recordTime(), deleted: false };
     assetData(record);
   } else {
-    let data = { kind, parent: kind === 'cash' || kind === 'stock' ? parent : null };
+    let data = { kind, parent: ['cash', 'stock', 'reported'].includes(kind) ? parent : null };
     if (kind === 'stock') {
       if (!parent) throw new Error('Choose a brokerage for this holding.');
       data = { ...data, currency, shares: $('shares').valueAsNumber, price: $('price').value === '' ? null : $('price').valueAsNumber,
@@ -1488,6 +1814,7 @@ submit('editor', async () => {
       }
     }
     if (balanceKinds.has(kind)) data = { ...data, currency, amount: $('amount').valueAsNumber };
+    if (!$('assetClassLabel').hidden && $('assetClass').value) data.assetClass = $('assetClass').value;
     record = assetRecord(id, title, data);
   }
   if (parent) openBrokers.add(parent);
