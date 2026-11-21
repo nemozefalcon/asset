@@ -1,0 +1,1610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-7p5wBCuZIm0PxdXPQBSH9WUvWY1RH38nrzchlHtcA30='; style-src 'sha256-H/VV+Arr5U9Sk2F0MHjZx0Wa/vrfYJtvsBjuFWm8j5k='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>Asset Vault</title>
+<style>
+:root { color-scheme: light; font: 16px/1.55 system-ui, sans-serif; color: #242722; background: #f4f4ed; --ink: #234d3e; --line: #d5d9ce; }
+* { box-sizing: border-box; }
+#controls { border: 0; padding: 0; margin: 0; min-width: 0; }
+[hidden] { display: none !important; }
+main { width: min(100% - 2rem, 44rem); margin: 3rem auto; }
+h1, h2 { line-height: 1.15; letter-spacing: -.035em; }
+h1 { font-size: clamp(2.5rem, 8vw, 4rem); margin: 0; }
+h2 { font-size: 1.4rem; margin: 0 0 .8rem; }
+p { margin: .6rem 0; }
+header { border-bottom: 2px solid var(--ink); padding-bottom: .85rem; }
+section, details { background: #fff; border: 1px solid var(--line); border-radius: .8rem; margin-top: 1rem; padding: 1.15rem; }
+summary { font-weight: 650; cursor: pointer; }
+label { display: block; margin-top: .6rem; font-weight: 600; }
+input, textarea, select, button { font: inherit; font-size: 16px; }
+input, textarea, select { display: block; width: 100%; margin-top: .25rem; border: 1px solid #7b857b; border-radius: .4rem; padding: .52rem .65rem; background: #fff; color: #242722; }
+textarea { min-height: 7rem; resize: vertical; }
+button { cursor: pointer; border: 1px solid var(--ink); color: var(--ink); border-radius: .45rem; background: #fff; min-height: 44px; padding: .43rem .75rem; }
+button.primary { background: var(--ink); color: #fff; }
+button.danger { color: #8c302c; border-color: #8c302c; }
+button:disabled { opacity: .55; cursor: wait; }
+:focus-visible { outline: 3px solid #ad6a17; outline-offset: 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .85rem; }
+.hint { color: #525b53; font-size: .93rem; }
+#status { min-height: 1.55em; color: var(--ink); overflow-wrap: anywhere; }
+#status.error { color: #8c302c; }
+#storage { color: #8c302c; }
+#records article { border-top: 1px solid var(--line); padding: .75rem 0; overflow-wrap: anywhere; }
+#records h3 { margin: 0; }
+#records p { white-space: pre-wrap; }
+.metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.metrics div { background: #edf2ea; border-radius: .5rem; padding: .7rem; overflow-wrap: anywhere; }
+.metrics span { display: block; color: #525b53; font-size: .88rem; }
+.metrics strong { display: block; font-size: clamp(1.12rem, 4vw, 1.65rem); color: var(--ink); }
+#rateForm { border-top: 1px solid var(--line); margin-top: .8rem; }
+#records .brokerage { margin-bottom: .8rem; background: #f7f8f4; }
+#records .brokerage article:first-of-type { margin-top: .8rem; }
+@media (max-width: 480px) { main { margin-top: 1.5rem; } section, details { padding: .9rem; } }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: .55rem; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+.asset-category { margin-top: 1rem; }
+.asset-category > h3 { display: flex; align-items: center; gap: .6rem; color: var(--ink); margin: .8rem 0 .55rem; }
+.category-count { font-size: .85rem; background: #e6f0eb; padding: .12rem .5rem; border-radius: 1rem; }
+.stock-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem .75rem; margin: .4rem 0; font-variant-numeric: tabular-nums; }
+.stock-stats dt { color: #525b53; font-size: .875rem; }
+.stock-stats dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+.stock-stats .gain { color: #17663d; }
+.stock-stats .loss { color: #9a3c2c; }
+@media (max-width: 580px) { .stock-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.portfolio-tabs { display: flex; gap: .5rem; margin: 1rem 0; }
+.portfolio-tabs [aria-selected="true"] { background: var(--ink); color: #fff; }
+#allStockRows article { border-top: 1px solid var(--line); padding: .8rem 0; }
+#allStockRows h3 { margin: 0; }
+.position-breakdown { margin: .5rem 0 0; padding: .4rem .65rem; background: #f7f8f4; }
+.position-breakdown p { margin: .35rem 0; }
+</style>
+</head>
+<body>
+<main>
+<header><h1>Asset Vault</h1><p>Cash, savings, and investments in ILS and USD</p></header>
+<p id="status" role="status" aria-live="polite"></p>
+<p id="storage" class="hint" role="status" hidden>Browser storage is unavailable. Unsynced data lasts only while this page stays open. Sync or export before leaving.</p>
+<fieldset id="controls">
+<section id="gate" hidden>
+<h2 id="gateTitle"></h2>
+<p id="source" class="hint"></p>
+<form id="unlock">
+<label>Passphrase <input id="password" required type="password" autocomplete="current-password" maxlength="1024"></label>
+<label id="repeatLabel">Repeat passphrase <input id="repeat" type="password" autocomplete="new-password" maxlength="1024"></label>
+<p id="strength" class="hint">Use at least 20 characters. Six randomly chosen words are a good starting point. There is no password recovery.</p>
+<div class="actions"><button id="unlockButton" class="primary"></button></div>
+</form>
+<div class="actions"><button type="button" id="retry">Reload vault</button></div>
+</section>
+<div id="workspace" hidden>
+<section id="dashboard">
+<h2>Portfolio value</h2>
+<div class="metrics">
+<div><span>Combined in ILS</span><strong id="totalILS">—</strong></div>
+<div><span>Combined in USD</span><strong id="totalUSD">—</strong></div>
+</div>
+<p id="nativeTotals" class="hint"></p>
+<p id="gainTotals" class="hint"></p><p id="fxStatus" class="hint"></p>
+<form id="rateForm">
+<label>Fallback exchange rate · ILS per 1 USD <input id="rate" type="number" inputmode="decimal" step="any" min="0.000001" max="10000" required placeholder="e.g. 3.65"></label>
+<div class="actions"><button type="submit">Save exchange rate</button></div>
+</form>
+</section>
+<section id="assetEditor">
+<h2 id="editHeading">Add an asset</h2>
+<form id="editor">
+<label>Asset type <select id="kind">
+<option value="bank">Bank account</option><option value="cash">Cash balance</option><option value="savings">Savings account</option><option value="pension">Pension fund</option><option value="education">Education fund</option><option value="land">Land investment</option>
+<option value="brokerage">Brokerage account</option><option value="stock">Stock or ETF</option>
+</select></label>
+<label id="parentLabel" hidden>Brokerage account <select id="parent"></select></label>
+<label><span id="nameLabel">Account name</span> <input id="title" required maxlength="200" autocomplete="off"></label>
+<label id="currencyLabel">Currency <select id="currency"><option value="ILS">ILS · Israeli shekel</option><option value="USD">USD · US dollar</option></select></label>
+<label id="amountLabel"><span id="amountCaption">Latest balance</span> <input id="amount" type="number" inputmode="decimal" step="any" max="1000000000000" min="-1000000000000"></label>
+<div id="stockFields" hidden>
+<label>Shares <input id="shares" type="number" inputmode="decimal" step="any" min="0.00000001" max="1000000000"></label>
+<label>Manual fallback price per share (optional with a symbol) <input id="price" type="number" inputmode="decimal" step="any" min="0" max="1000000000"></label>
+<label>Average cost per share (optional) <input id="cost" type="number" inputmode="decimal" step="any" min="0" max="1000000000"></label>
+<label>Market data symbol (optional) <input id="symbol" autocomplete="off" maxlength="40" placeholder="e.g. AAPL"></label>
+<label>Exchange MIC (optional) <input id="exchange" autocomplete="off" maxlength="4" placeholder="e.g. XTAE for Tel Aviv"></label>
+<label>Provider quote unit <select id="quoteUnit"><option value="1">Selected currency</option><option value="100">Agorot (divide by 100)</option></select></label>
+<p class="hint">Enter prices and costs in the selected currency. Divide TASE quotes in agorot by 100 to enter them in ILS.</p>
+</div>
+<label id="notesLabel" hidden>Notes <textarea id="notes" maxlength="20000" autocomplete="off"></textarea></label>
+<div class="actions"><button class="primary" id="saveAsset">Save asset</button><button type="button" id="cancelEdit" hidden>Cancel edit</button></div>
+</form>
+</section>
+<div class="portfolio-tabs" role="tablist" aria-label="Portfolio views">
+<button id="accountsTab" type="button" role="tab" aria-selected="true" aria-controls="accounts">Accounts</button>
+<button id="allStocksTab" type="button" role="tab" aria-selected="false" aria-controls="allStocks" tabindex="-1">All stocks</button>
+</div>
+<section id="allStocks" role="tabpanel" aria-labelledby="allStocksTab" hidden><h2>Consolidated holdings</h2><div id="allStockRows"></div></section>
+<section id="accounts" role="tabpanel" aria-labelledby="accountsTab"><h2>Accounts and holdings</h2><div id="records"></div>
+</section>
+<div class="actions"><button id="sync" type="button">Sync now</button><button id="lock" type="button">Lock</button></div>
+
+<details id="marketSettings"><summary>Market data</summary>
+<p class="hint">Connect Twelve Data for the latest available quotes and daily closes. Access and delay depend on your provider plan and exchange. Your key stays in this tab. The provider receives the configured symbols and your key.</p>
+<form id="marketForm">
+<label>Twelve Data API key <input id="marketKey" type="password" autocomplete="off" maxlength="256"></label>
+<div class="actions"><button class="primary">Connect and refresh</button>
+<button type="button" id="refreshMarket">Refresh prices</button>
+<button type="button" id="forgetMarket">Disconnect</button></div>
+</form>
+<p id="marketStatus" role="status" class="hint"></p>
+</details>
+<section id="historyPanel">
+<h2>Daily history</h2>
+<label>History view <select id="historyAsset"></select></label>
+<p id="historyHint" class="hint"></p>
+<div id="historyTable" class="table-scroll"></div>
+</section>
+<details><summary>Backups and passphrase</summary>
+<p class="hint">CSV and JSON backups contain readable records. Keep them private and outside the public repo. Import can add accounts, holdings, or dated portfolio snapshots. An imported exchange rate replaces the current rate.</p>
+<div class="actions"><button id="json" type="button">Export JSON</button><button id="csv" type="button">Export CSV</button></div>
+<label>Import CSV or JSON <input id="import" type="file" accept=".csv,.json,text/csv,application/json"></label>
+<form id="rotate">
+<label>Old passphrase <input id="old" required type="password" autocomplete="current-password" maxlength="1024"></label>
+<label>New passphrase <input id="next" required type="password" autocomplete="new-password" maxlength="1024"></label>
+<label>Repeat new passphrase <input id="nextRepeat" required type="password" autocomplete="new-password" maxlength="1024"></label>
+<p class="hint">Use at least 20 characters. Connected vaults require a successful GitHub write to change the passphrase. Git history retains older versions.</p>
+<div class="actions"><button>Change passphrase</button></div>
+</form>
+</details>
+</div>
+<details id="github"><summary>GitHub connection</summary>
+<form id="connection">
+<p class="hint">Use a fine-grained token restricted to the selected repository with Contents read/write. The app keeps the token in this tab’s memory. Set the repository and branch before creating a vault you intend to sync.</p>
+<label>Repository (owner/repo) <input id="repo" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+<label>Branch <input id="branch" value="main" required autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+<label>Token <input id="token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+<div class="actions"><button id="connect">Apply connection</button><button id="forget" type="button">Forget token</button></div>
+</form>
+</details>
+<details><summary>Start over on this device</summary>
+<p class="hint">Clear this vault’s local copy and start fresh. Unsynced changes will be lost. The remote file and its history stay on GitHub. To reopen the remote file, lock and reload the vault. To sync an unrelated fresh vault, use an empty repository or branch.</p>
+<div class="actions"><button id="reset" type="button" class="danger">Start over on this device</button><button id="cancelReset" type="button" hidden>Cancel</button></div>
+</details>
+</fieldset>
+<details><summary>Privacy and security</summary>
+<p>The public repository exposes the encrypted file, format and KDF parameters, file sizes, commit times and GitHub commit attribution. Anyone can copy the file and try passwords offline. PBKDF2 slows each guess. A unique, randomly generated passphrase is essential.</p>
+<p>Git history retains old ciphertext under the old passphrase. Changing it protects the newly encrypted file. Anyone with an old copy and its old passphrase can still decrypt it. Public snapshots may also be copied or restored by someone with repository write access.</p>
+<p>A stolen token can modify repository contents, including the app itself. Someone who controls the HTML served to your browser can replace this page and capture passphrases, tokens and unlocked data. The hash-based Content Security Policy reduces script injection risk. It cannot protect against a compromised publisher, browser, extension or device. GitHub Pages project sites on the same hostname share a browser origin, so use a dedicated origin where possible.</p>
+<p>Bank and savings balances are entered manually. The optional Twelve Data connection refreshes quotes while this tab is open, with daily market closes used for historical valuation. Price delay and symbol coverage depend on your provider plan. Merge uses per-record timestamps. In a simultaneous edit to one record, one version wins. Device clock differences affect ordering. Use one editing tab per device because tabs share one local cache. Deletions are retained as encrypted tombstones to prevent an older device from restoring deleted records.</p>
+</details>
+</main>
+<script>
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+const encoder = new TextEncoder();
+const decoder = new TextDecoder('utf-8', { fatal: true });
+const iterations = 600_000;
+const maxEnvelope = 1_000_000;
+const configKey = 'record-vault:config:' + location.pathname;
+const memory = new Map();
+let storageBlocked = false;
+let repo = '';
+let branch = 'main';
+let token = '';
+let active = null;
+let candidate = null;
+let canCreate = false;
+let forceNew = false;
+let editing = null;
+let resetArmed = false;
+let lastTimestamp = 0;
+
+class WrongPassword extends Error {
+  constructor() { super('Wrong password.'); }
+}
+class FormatError extends Error {}
+class Conflict extends Error {}
+
+function status(message, error = false) {
+  $('status').textContent = message;
+  $('status').classList.toggle('error', error);
+}
+
+function storageFailure() {
+  storageBlocked = true;
+  $('storage').hidden = false;
+}
+
+function readLocal(name) {
+  if (memory.has(name)) return memory.get(name);
+  if (storageBlocked) return null;
+  try { return localStorage.getItem(name); }
+  catch { storageFailure(); return null; }
+}
+
+function writeLocal(name, value) {
+  if (!storageBlocked) {
+    try {
+      if (value === null) localStorage.removeItem(name);
+      else localStorage.setItem(name, value);
+      memory.delete(name);
+      return;
+    } catch { storageFailure(); }
+  }
+  memory.set(name, value);
+}
+
+function cacheKey() {
+  return 'record-vault:data:' + location.pathname + ':' + repo.toLowerCase() + ':' + branch;
+}
+
+function readCache() {
+  const value = readLocal(cacheKey());
+  if (value === null) return null;
+  const cached = parseJSON(value, 'Device cache');
+  if (typeof cached?.pending !== 'boolean') throw new FormatError('Invalid device cache.');
+  validateEnvelope(cached.envelope);
+  return cached;
+}
+
+function cache(envelope, pending) {
+  writeLocal(cacheKey(), JSON.stringify({ pending, envelope }));
+}
+
+function b64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return btoa(binary);
+}
+
+function unb64(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(value) || value.length % 4) {
+    throw new FormatError('Invalid base64 in vault file.');
+  }
+  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+}
+
+function parseJSON(text, label) {
+  try { return JSON.parse(text); }
+  catch { throw new FormatError(label + ' contains invalid JSON.'); }
+}
+
+function validateEnvelope(value) {
+  if (value?.v !== 1) throw new FormatError('Unsupported or missing vault version.');
+  if (!Number.isSafeInteger(value.iter) || value.iter < iterations || value.iter > 5_000_000 ||
+      value.ct?.length > maxEnvelope || unb64(value.salt).length !== 16 ||
+      unb64(value.iv).length !== 12 || unb64(value.ct).length < 16) {
+    throw new FormatError('Invalid vault encryption parameters.');
+  }
+  return value;
+}
+
+function parseEnvelope(text) {
+  if (text.length > maxEnvelope) throw new FormatError('Vault file exceeds the supported size.');
+  return validateEnvelope(parseJSON(text, 'Vault file'));
+}
+
+function newParameters() {
+  return { v: 1, iter: iterations, salt: b64(crypto.getRandomValues(new Uint8Array(16))) };
+}
+
+async function derive(password, parameters) {
+  const material = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({
+    name: 'PBKDF2', hash: 'SHA-256', salt: unb64(parameters.salt), iterations: parameters.iter
+  }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+function parametersOf({ v, iter, salt }) { return { v, iter, salt }; }
+
+function aad({ v, iter, salt }) { return encoder.encode(JSON.stringify([v, iter, salt])); }
+
+async function seal(records, key, parameters) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad(parameters) },
+    key, encoder.encode(JSON.stringify(records)));
+  const envelope = { ...parameters, iv: b64(iv), ct: b64(new Uint8Array(ciphertext)) };
+  if (JSON.stringify(envelope).length > maxEnvelope) {
+    throw new FormatError('Vault is too large to save. Export records before making further changes.');
+  }
+  return envelope;
+}
+
+function validFields(title, notes) {
+  return typeof title === 'string' && title.trim().length > 0 && title.length <= 200 &&
+    typeof notes === 'string' && notes.length <= 20000;
+}
+
+async function openEnvelope(envelope, key) {
+  let plain;
+  try {
+    plain = await crypto.subtle.decrypt({
+      name: 'AES-GCM', iv: unb64(envelope.iv), additionalData: aad(envelope)
+    }, key, unb64(envelope.ct));
+  } catch (error) {
+    if (error.name === 'OperationError') throw new WrongPassword();
+    throw error;
+  }
+  let decoded;
+  try { decoded = decoder.decode(plain); }
+  catch { throw new FormatError('Decrypted vault contains invalid UTF-8.'); }
+  const records = parseJSON(decoded, 'Decrypted vault');
+  const ids = new Set();
+  if (!Array.isArray(records)) throw new FormatError('Invalid record list.');
+  return records.map((record) => {
+    if (typeof record?.id !== 'string' || !/^[a-f0-9-]{36}$/.test(record.id) || ids.has(record.id) ||
+        !Number.isSafeInteger(record.updatedAt) || record.updatedAt < 0 ||
+        record.updatedAt >= Number.MAX_SAFE_INTEGER - 1 || typeof record.deleted !== 'boolean' ||
+        (!record.deleted && !validFields(record.title, record.notes))) {
+      throw new FormatError('Invalid record in decrypted vault.');
+    }
+    ids.add(record.id);
+    const { id, updatedAt, deleted, title, notes } = record;
+    const validated = deleted ? { id, updatedAt, deleted } : { id, updatedAt, deleted, title, notes };
+    assetData(validated);
+    return validated;
+  });
+}
+
+function merge(local, remote) {
+  const records = new Map(local.map((record) => [record.id, record]));
+  for (const incoming of remote) {
+    const existing = records.get(incoming.id);
+    if (!existing || incoming.updatedAt > existing.updatedAt ||
+      (incoming.updatedAt === existing.updatedAt &&
+       (incoming.deleted !== existing.deleted ? incoming.deleted : JSON.stringify(incoming) > JSON.stringify(existing)))) {
+      records.set(incoming.id, incoming);
+    }
+  }
+  return [...records.values()];
+}
+
+function recordTime() {
+  lastTimestamp = Math.max(Date.now(), lastTimestamp + 1);
+  return lastTimestamp;
+}
+
+function observeTimes(records) {
+  for (const record of records) lastTimestamp = Math.max(lastTimestamp, record.updatedAt);
+}
+
+function endpoint() {
+  const path = repo.split('/').map(encodeURIComponent).join('/');
+  return 'https://api.github.com/repos/' + path + '/contents/data.enc.json';
+}
+
+function headers() {
+  const result = { Accept: 'application/vnd.github+json' };
+  if (token) result.Authorization = 'Bearer ' + token;
+  return result;
+}
+
+function fetchVault(url, options = {}) {
+  return fetch(url, { cache: 'no-store', credentials: 'omit', redirect: 'error',
+    signal: AbortSignal.timeout(15000), ...options });
+}
+
+async function getRemote() {
+  if (!repo) {
+    if (!['http:', 'https:'].includes(location.protocol)) return null;
+    const response = await fetchVault('./data.enc.json?t=' + Date.now());
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error('Vault download failed (HTTP ' + response.status + ').');
+    return { envelope: parseEnvelope(await response.text()) };
+  }
+  const response = await fetchVault(endpoint() + '?' + new URLSearchParams({ ref: branch, t: Date.now() }),
+    { headers: headers() });
+  if (response.status === 404) {
+    const root = await fetchVault(endpoint().replace('/data.enc.json', '') + '?' +
+      new URLSearchParams({ ref: branch, t: Date.now() }), { headers: headers() });
+    if (root.ok) return null;
+    throw new Error('GitHub could not verify the repository and branch (HTTP ' + root.status + ').');
+  }
+  if (!response.ok) throw new Error('GitHub read failed (HTTP ' + response.status + ').');
+  const file = await response.json();
+  if (file.type !== 'file' || file.encoding !== 'base64' || typeof file.sha !== 'string' ||
+      typeof file.content !== 'string' || file.size > maxEnvelope) {
+    throw new FormatError('GitHub returned an unsupported vault file.');
+  }
+  let decoded;
+  try { decoded = decoder.decode(unb64(file.content.replace(/\s/g, ''))); }
+  catch { throw new FormatError('GitHub returned invalid vault contents.'); }
+  return { envelope: parseEnvelope(decoded), sha: file.sha };
+}
+
+async function putRemote(envelope, sha) {
+  const body = { message: 'Update encrypted vault', branch, content: b64(encoder.encode(JSON.stringify(envelope))) };
+  if (sha) body.sha = sha;
+  const response = await fetchVault(endpoint(), {
+    method: 'PUT', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  if (response.status === 409 || response.status === 422) throw new Conflict('GitHub rejected the write (HTTP ' + response.status + ').');
+  if (!response.ok) throw new Error('GitHub write failed (HTTP ' + response.status + ').');
+}
+
+async function readForMerge(remote) {
+  if (!remote) return [];
+  const parameters = parametersOf(remote.envelope);
+  if (parameters.salt !== active.parameters.salt || parameters.iter !== active.parameters.iter) {
+    throw new Error('GitHub has a different vault or a changed passphrase. Export any unsynced records before clearing the device copy.');
+  }
+  return openEnvelope(remote.envelope, active.key);
+}
+
+async function syncRecords(records, nextKey = active.key, nextParameters = active.parameters, rotating = false) {
+  let attempted;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const remote = await getRemote();
+    const merged = merge(records, await readForMerge(remote));
+    const envelope = await seal(merged, nextKey, nextParameters);
+    if (!rotating) {
+      cache(envelope, true);
+      active = { ...active, records: merged, envelope };
+      records = merged;
+      observeTimes(merged);
+    }
+    attempted = { key: nextKey, parameters: nextParameters, records: merged, envelope };
+    try { await putRemote(envelope, remote?.sha); }
+    catch (error) {
+      if (error instanceof Conflict && attempt < 2) continue;
+      if (rotating && !(error instanceof Conflict)) {
+        // A lost response may follow a successful commit.
+        const current = await getRemote().catch(() => null);
+        if (current?.envelope.ct === envelope.ct && current.envelope.iv === envelope.iv) return attempted;
+        throw new Error(error.message + ' Check GitHub before retrying a passphrase change.');
+      }
+      throw error;
+    }
+    return attempted;
+  }
+}
+
+function checkPassphrase(password, repeated) {
+  if (password !== repeated) throw new Error('The passphrases do not match.');
+  if ([...password.trim()].length < 20) throw new Error('Use a passphrase of at least 20 characters.');
+}
+
+const assetPrefix = 'Asset Vault v1\n';
+const rateId = '00000000-0000-4000-8000-000000000001';
+const balanceKinds = new Set(['bank', 'cash', 'savings', 'pension', 'education', 'land']);
+const accountKinds = new Set([...balanceKinds, 'brokerage', 'stock']);
+const currencyCodes = ['ILS', 'USD'];
+const openBrokers = new Set();
+const money = Object.fromEntries(currencyCodes.map((code) => [code, new Intl.NumberFormat('en', {
+  style: 'currency', currency: code, currencyDisplay: 'code'
+})]));
+const quantity = new Intl.NumberFormat('en', { maximumFractionDigits: 8 });
+const unitPrice = Object.fromEntries(currencyCodes.map((code) => [code, new Intl.NumberFormat('en', {
+  style: 'currency', currency: code, currencyDisplay: 'code', maximumFractionDigits: 8
+})]));
+const historyDays = 90;
+const dayFormat = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit'
+});
+const marketRefresh = 60 * 60 * 1000;
+const fxListing = { symbol: 'USD/ILS', exchange: '', currency: 'ILS', divisor: 1 };
+let marketToken = '';
+let lastMarketAttempt = 0;
+
+function day(timestamp = Date.now()) {
+  const parts = Object.fromEntries(dayFormat.formatToParts(timestamp).map(({ type, value }) => [type, value]));
+  return [parts.year, parts.month, parts.day].join('-');
+}
+
+function daysBefore(date, back) {
+  return new Date(Date.parse(date) - back * 86400000).toISOString().slice(0, 10);
+}
+
+function isDay(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value));
+}
+
+function validListing(data) {
+  return typeof data?.symbol === 'string' && /^[A-Z0-9][A-Z0-9./_-]{0,39}$/.test(data.symbol) &&
+    typeof data.exchange === 'string' && /^(?:[A-Z0-9]{4})?$/.test(data.exchange) &&
+    currencyCodes.includes(data.currency) && [1, 100].includes(data.divisor) &&
+    (data.divisor === 1 || data.currency === 'ILS');
+}
+
+function validateHistoryData(data) {
+  if (data?.kind === 'portfolio-history') {
+    if (!isDay(data.date) || !isNumber(data.total, -1e12, 1e12) ||
+        ![data.liquid, data.nonLiquid].every((value) => value === null || isNumber(value, -1e12, 1e12)) ||
+        !(data.fx === null || isNumber(data.fx, 0.000001, 10000))) {
+      throw new FormatError('Invalid imported portfolio history.');
+    }
+    return true;
+  }
+  if (data?.kind === 'market') {
+    if (!validListing(data.listing) || !isDay(data.date) || !isNumber(data.quote, 0, 1e9) ||
+        !isNumber(data.fetchedAt, 0, 9e15) || !Array.isArray(data.closes) || data.closes.length > 120 ||
+        !data.closes.every((row) => Array.isArray(row) && isDay(row[0]) && isNumber(row[1], 0, 1e9))) {
+      throw new FormatError('Invalid market data.');
+    }
+    return true;
+  }
+  if (data?.kind === 'snapshot') {
+    if (typeof data.assetId !== 'string' || !/^[a-f0-9-]{36}$/.test(data.assetId) || !isDay(data.date)) {
+      throw new FormatError('Invalid balance history.');
+    }
+    if (data.state !== null) {
+      const state = data.state;
+      if (!trackable(state)) throw new FormatError('Invalid historical asset.');
+      assetData({ notes: assetPrefix + JSON.stringify(state) });
+    }
+    return true;
+  }
+  return false;
+}
+
+async function namedId(name) {
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(name)));
+  const hex = Array.from(hash.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return hex.replace(/^(........)(....)(....)(....)(............)$/, '$1-$2-$3-$4-$5');
+}
+
+function trackable(data) {
+  return balanceKinds.has(data?.kind) || ['stock', 'rate'].includes(data?.kind);
+}
+
+async function withHistory(records, previous) {
+  const today = day();
+  const before = new Map(previous.map((record) => [record.id, record]));
+  const snapshots = new Set(records.filter((record) => assetData(record)?.kind === 'snapshot')
+    .map((record) => assetData(record).assetId));
+  const additions = [];
+  for (const record of records) {
+    const old = before.get(record.id);
+    const data = assetData(record);
+    const prior = old && assetData(old);
+    if (!trackable(data) && !trackable(prior)) continue;
+    if (old === record && snapshots.has(record.id)) continue;
+    const saveMark = async (date, state) => {
+      const id = await namedId('asset-history:' + record.id + ':' + date);
+      return assetRecord(id, record.deleted ? old.title : record.title, { kind: 'snapshot', assetId: record.id, date, state });
+    };
+    if (!snapshots.has(record.id) && trackable(prior) && day(old.updatedAt) !== today) {
+      additions.push(await saveMark(day(old.updatedAt), prior));
+    }
+    if (old !== record || !snapshots.has(record.id)) {
+      additions.push(await saveMark(old === record ? day(record.updatedAt) : today, record.deleted ? null : data));
+    }
+  }
+  return additions.length ? merge(records, additions) : records;
+}
+
+function listingFor(data) {
+  return data.symbol ? { symbol: data.symbol, exchange: data.exchange, currency: data.currency, divisor: data.divisor } : null;
+}
+
+function listingKey(listing) {
+  return [listing.symbol, listing.exchange, listing.currency, listing.divisor].join('|');
+}
+
+function getMarketData(records) {
+  const market = new Map();
+  for (const record of records) {
+    const data = assetData(record);
+    if (data?.kind === 'market') market.set(listingKey(data.listing), data);
+  }
+  return market;
+}
+
+function quotesFor(data, market) {
+  const listing = listingFor(data);
+  return listing ? market.get(listingKey(listing)) : undefined;
+}
+
+function numericQuote(value) {
+  if (typeof value === 'string' && value.trim() !== '') value = Number(value);
+  return isNumber(value, 0, 1e9) ? value : null;
+}
+
+async function marketRequest(endpoint, params) {
+  const query = new URLSearchParams({ ...params, apikey: marketToken });
+  const response = await fetchVault('https://api.twelvedata.com/' + endpoint + '?' + query);
+  const payload = await response.json();
+  if (!response.ok || payload?.status === 'error') {
+    const code = Number(payload?.code) || response.status;
+    throw new Error(code === 429 ? 'Provider rate limit reached' : 'Provider rejected request (' + code + ')');
+  }
+  return payload;
+}
+
+function checkQuoteCurrency(value, listing) {
+  const code = String(value ?? '').trim();
+  if (code.toUpperCase() !== listing.currency && !(listing.currency === 'ILS' && /^(ILA|ILX|ILSx|Agorot)$/i.test(code))) {
+    throw new Error('Quote currency does not match this asset');
+  }
+  if (listing.currency === 'ILS' && /^(ILA|ILX|ILSx|Agorot)$/i.test(code) && listing.divisor !== 100) {
+    throw new Error('Set the quote unit to agorot');
+  }
+}
+
+async function fetchListing(listing, existing) {
+  const params = { symbol: listing.symbol };
+  if (listing.exchange) params.mic_code = listing.exchange;
+  let closes = existing?.closes;
+  let closeError = '';
+  if (!closes || existing.seriesDay !== day()) {
+    try {
+      const series = await marketRequest('time_series', { ...params, interval: '1day', outputsize: '90', adjust: 'none' });
+      checkQuoteCurrency(series.meta?.currency ?? series.meta?.currency_quote, listing);
+      if (!Array.isArray(series.values)) throw new Error('No daily prices returned');
+      closes = series.values.map((row) => [row.datetime, numericQuote(row.close)])
+        .filter(([date, value]) => isDay(date) && value !== null)
+        .map(([date, value]) => [date, value / listing.divisor])
+        .sort(([a], [b]) => a.localeCompare(b));
+      if (!closes.length) throw new Error('No valid daily prices returned');
+    } catch (error) { closeError = error.message; }
+  }
+  let quote;
+  let date;
+  let source = 'Latest available quote';
+  let quoteError = '';
+  try {
+    const value = await marketRequest('quote', params);
+    checkQuoteCurrency(value.currency ?? value.currency_quote, listing);
+    quote = numericQuote(value.close);
+    date = value.datetime?.slice(0, 10);
+    if (quote === null || !isDay(date)) throw new Error('No dated quote returned');
+    quote /= listing.divisor;
+  } catch (error) {
+    quoteError = error.message;
+    const last = closes?.at(-1);
+    if (!last && !existing) throw error;
+    if (existing && (!last || existing.date >= last[0])) {
+      ({ quote, date, source } = existing);
+    } else {
+      [date, quote] = last;
+      source = 'Daily close';
+    }
+  }
+  if (existing && existing.date > date) ({ quote, date, source } = existing);
+  const seriesDay = closeError ? existing?.seriesDay : day();
+  return {
+    data: { kind: 'market', listing, quote, date, fetchedAt: Date.now(), source, closes: closes || [], seriesDay },
+    warning: [closeError, quoteError].filter(Boolean).join('. ')
+  };
+}
+
+async function refreshMarket() {
+  if (!marketToken) throw new Error('Connect a Twelve Data key to refresh market data.');
+  lastMarketAttempt = Date.now();
+  const market = getMarketData(active.records);
+  const listings = new Map([[listingKey(fxListing), fxListing]]);
+  for (const record of active.records) {
+    const data = assetData(record);
+    const listing = data?.kind === 'stock' && listingFor(data);
+    if (listing) listings.set(listingKey(listing), listing);
+  }
+  const updates = [];
+  const problems = [];
+  $('marketStatus').textContent = 'Fetching quotes and daily closes…';
+  for (const [key, listing] of listings) {
+    try {
+      const { data, warning } = await fetchListing(listing, market.get(key));
+      const id = await namedId('market:' + key);
+      updates.push(assetRecord(id, listing.symbol + ' market data', data));
+      if (warning) problems.push(listing.symbol + ' · ' + warning);
+    } catch (error) { problems.push(listing.symbol + ' · ' + error.message); }
+  }
+  if (updates.length) await save(merge(active.records, updates));
+  else status('Market data could not be refreshed.', true);
+  $('marketStatus').textContent = problems.length ? problems.join(' | ') : 'Market data refreshed.';
+}
+
+function queueMarketRefresh() {
+  if (!active || !marketToken || document.hidden || (lastMarketAttempt && Date.now() - lastMarketAttempt < marketRefresh)) return;
+  if ($('controls').disabled) {
+    setTimeout(queueMarketRefresh, 500);
+    return;
+  }
+  perform(refreshMarket);
+}
+
+function lastClose(quote, date) {
+  return quote?.closes.findLast(([mark]) => mark <= date);
+}
+
+function portfolioHistory(history, market, selected) {
+  const rows = [];
+  const today = day();
+  const last = daysBefore(today, 1);
+  const entity = selected && history.get(selected);
+  const markets = market.get(listingKey(fxListing));
+  const states = entity ? [entity] : [...history.values()];
+  for (let i = 0; i < historyDays; i++) {
+    const date = daysBefore(last, i);
+    const totals = { ILS: 0, USD: 0 };
+    let missing = 0;
+    let closePrice;
+    let known = false;
+    const manualRate = history.get(rateId)?.findLast((entry) => entry.date <= date)?.state?.rate;
+    const rate = lastClose(markets, date)?.[1] || manualRate;
+    for (const marks of states) {
+      const mark = marks.findLast((entry) => entry.date <= date);
+      if (!mark || mark.state?.kind === 'rate') continue;
+      known = true;
+      if (!mark.state) continue;
+      const data = mark.state;
+      if (data.kind === 'stock' && data.symbol) {
+        const close = lastClose(quotesFor(data, market), date);
+        if (close) {
+          totals[data.currency] += close[1] * data.shares;
+          if (entity) closePrice = unitPrice[data.currency].format(close[1]) + (close[0] === date ? '' : ' · ' + close[0]);
+        } else missing++;
+      } else {
+        totals[data.currency] += currentValue(data);
+      }
+    }
+    if (known) rows.push({ date, totals, missing, rate, closePrice });
+  }
+  return rows;
+}
+
+function renderImportedHistory(rows) {
+  $('historyHint').textContent = 'Original workbook snapshots in ILS. This view leaves the current portfolio totals unchanged.';
+  const table = element('table');
+  const head = element('thead');
+  const header = element('tr');
+  header.append(...['Date', 'Total', 'Liquid', 'Non-liquid', 'USD/ILS'].map((label) => element('th', label)));
+  head.append(header);
+  const body = element('tbody');
+  const format = (value) => value === null ? '—' : money.ILS.format(value);
+  for (const { date, total, liquid, nonLiquid, fx } of rows.sort((a, b) => b.date.localeCompare(a.date))) {
+    const row = element('tr');
+    row.append(...[date, format(total), format(liquid), format(nonLiquid), fx === null ? '—' : quantity.format(fx)]
+      .map((value) => element('td', value)));
+    body.append(row);
+  }
+  table.append(head, body);
+  $('historyTable').replaceChildren(table);
+}
+
+function renderHistory(market) {
+  const select = $('historyAsset');
+  const selected = select.value;
+  const history = new Map();
+  const titles = new Map();
+  for (const record of active.records) {
+    const data = assetData(record);
+    if (data?.kind === 'snapshot') {
+      if (!history.has(data.assetId)) history.set(data.assetId, []);
+      history.get(data.assetId).push({ date: data.date, state: data.state });
+      titles.set(data.assetId, record.title);
+    }
+  }
+  for (const record of active.records) {
+    const data = assetData(record);
+    if (trackable(data) && !history.has(record.id)) {
+      history.set(record.id, [{ date: day(record.updatedAt), state: data }]);
+      titles.set(record.id, record.title);
+    } else if (trackable(data)) titles.set(record.id, record.title);
+  }
+  for (const records of history.values()) records.sort((a, b) => a.date.localeCompare(b.date));
+  select.replaceChildren(new Option('Entire portfolio', ''), ...Array.from(titles)
+    .filter(([id]) => id !== rateId).map(([id, title]) => new Option(title, id)));
+  const imported = active.records.map(assetData).filter((data) => data?.kind === 'portfolio-history');
+  if (imported.length) select.add(new Option('Imported portfolio history', 'imported'));
+  if (selected === 'imported' && imported.length) select.value = selected;
+  else if (titles.has(selected)) select.value = selected;
+  if (select.value === 'imported') {
+    renderImportedHistory(imported);
+    return;
+  }
+  const rows = portfolioHistory(history, market, select.value);
+  const showClose = Boolean(select.value && history.get(select.value)?.some((mark) => mark.state?.symbol));
+  $('historyHint').textContent = 'Up to 90 days through yesterday. Uses recorded positions, daily closes where available, and the most recent known balances. Missing prices leave totals partial.';
+  if (!rows.length) {
+    $('historyTable').textContent = 'History appears after the first recorded day ends.';
+    return;
+  }
+  const table = element('table');
+  const head = element('thead');
+  const header = element('tr');
+  const labels = ['Date', 'ILS assets', 'USD assets', 'Combined in ILS'];
+  if (showClose) labels.splice(1, 0, 'Last daily close');
+  header.append(...labels.map((label) => element('th', label)));
+  head.append(header);
+  const body = element('tbody');
+  for (const { date, totals, missing, rate, closePrice } of rows) {
+    const row = element('tr');
+    const combined = missing ? 'Partial · ' + missing + ' missing' : totals.USD === 0 ?
+      money.ILS.format(totals.ILS) : rate ? money.ILS.format(totals.ILS + totals.USD * rate) : 'FX unavailable';
+    const cells = [date, money.ILS.format(totals.ILS), money.USD.format(totals.USD), combined];
+    if (showClose) cells.splice(1, 0, closePrice ?? '—');
+    row.append(...cells.map((value) => element('td', value)));
+    body.append(row);
+  }
+  table.append(head, body);
+  $('historyTable').replaceChildren(table);
+}
+
+const percent = new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 2, signDisplay: 'exceptZero' });
+
+function isNumber(value, min, max) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+}
+
+function assetData(record) {
+  if (record.deleted || !record.notes.startsWith(assetPrefix)) return null;
+  const data = parseJSON(record.notes.slice(assetPrefix.length), 'Asset');
+  if (validateHistoryData(data)) return data;
+  if (data?.kind === 'rate' && isNumber(data.rate, 0.000001, 10000)) return data;
+  if (!accountKinds.has(data?.kind) || !(data.parent === null || typeof data.parent === 'string')) {
+    throw new FormatError('Invalid asset type or account link.');
+  }
+  if (data.kind === 'brokerage' && data.parent === null) return data;
+  if (currencyCodes.includes(data.currency)) {
+    if (data.kind === 'stock' && typeof data.parent === 'string' && isNumber(data.shares, 1e-8, 1e9) &&
+        (isNumber(data.price, 0, 1e9) || (data.price === null && data.symbol)) && (data.cost === null || isNumber(data.cost, 0, 1e9)) &&
+        (data.previousPrice === undefined || isNumber(data.previousPrice, 0, 1e9)) &&
+        (data.symbol === undefined || validListing(data))) return data;
+    if ((data.kind === 'cash' || (balanceKinds.has(data.kind) && data.parent === null)) &&
+        isNumber(data.amount, -1e12, 1e12)) return data;
+  }
+  throw new FormatError('Invalid asset values.');
+}
+
+function assetRecord(id, title, data) {
+  const record = { id, title, notes: assetPrefix + JSON.stringify(data), updatedAt: recordTime(), deleted: false };
+  assetData(record);
+  return record;
+}
+
+function brokerageRecords() {
+  return active.records.filter((record) => assetData(record)?.kind === 'brokerage');
+}
+
+function syncEditor() {
+  const kind = $('kind').value;
+  const parent = $('parent').value;
+  const linked = kind === 'stock' || kind === 'cash';
+  $('parent').replaceChildren(new Option('Standalone account', ''), ...brokerageRecords().map(
+    (record) => new Option(record.title, record.id)
+  ));
+  $('parent').value = [...$('parent').options].some((option) => option.value === parent) ? parent : '';
+  $('parentLabel').hidden = !linked;
+  $('parent').disabled = !linked;
+  $('parent').required = kind === 'stock';
+  $('parent').options[0].textContent = kind === 'stock' ? 'Select a brokerage' : 'Standalone account';
+  $('nameLabel').textContent = kind === 'stock' ? 'Ticker or fund name' : kind === 'cash' && $('parent').value ? 'Cash label' : 'Account name';
+  $('currencyLabel').hidden = kind === 'brokerage' || kind === 'note';
+  $('currency').disabled = $('currencyLabel').hidden;
+  $('amountCaption').textContent = kind === 'land' ? 'Estimated value' : 'Latest balance';
+  $('amountLabel').hidden = !balanceKinds.has(kind);
+  $('amount').disabled = $('amountLabel').hidden;
+  $('amount').required = !$('amount').disabled;
+  $('stockFields').hidden = kind !== 'stock';
+  for (const id of ['shares', 'price', 'cost', 'symbol', 'exchange', 'quoteUnit']) $(id).disabled = kind !== 'stock';
+  $('shares').required = kind === 'stock';
+  $('price').required = kind === 'stock' && !$('symbol').value.trim();
+  $('notesLabel').hidden = kind !== 'note';
+}
+
+function clearEditor() {
+  editing = null;
+  $('kind').querySelector('option[value="note"]')?.remove();
+  $('editor').reset();
+  $('kind').disabled = false;
+  $('editHeading').textContent = 'Add an asset';
+  $('cancelEdit').hidden = true;
+  if (active) syncEditor();
+}
+
+function editAsset(record, kind, parent = '') {
+  clearEditor();
+  const data = record ? assetData(record) : null;
+  if (record && !data) $('kind').add(new Option('Legacy note', 'note'));
+  $('kind').value = data?.kind ?? (record ? 'note' : kind);
+  $('kind').disabled = Boolean(record);
+  syncEditor();
+  $('parent').value = data?.parent ?? parent;
+  if (parent) openBrokers.add(parent);
+  $('title').value = record?.title ?? (kind === 'cash' ? 'Cash' : '');
+  $('notes').value = record && !data ? record.notes : '';
+  $('currency').value = data?.currency ?? 'ILS';
+  $('symbol').value = data?.symbol ?? '';
+  $('exchange').value = data?.exchange ?? '';
+  $('quoteUnit').value = data?.divisor ?? 1;
+  for (const id of ['amount', 'shares', 'price', 'cost']) $(id).value = data?.[id] ?? '';
+  editing = record?.id ?? null;
+  $('editHeading').textContent = editing ? 'Edit ' + (data?.kind === 'stock' ? 'holding' : 'record') :
+    (kind === 'stock' ? 'Add stock or ETF' : 'Add brokerage cash');
+  $('cancelEdit').hidden = false;
+  syncEditor();
+  $('title').focus();
+}
+
+function element(tag, content, className) {
+  const node = document.createElement(tag);
+  if (content !== undefined) node.textContent = content;
+  if (className) node.className = className;
+  return node;
+}
+
+function action(label, callback, name = label) {
+  const button = element('button', label);
+  button.type = 'button';
+  button.setAttribute('aria-label', name);
+  button.addEventListener('click', callback);
+  return button;
+}
+
+function recordActions(record) {
+  const group = element('div', undefined, 'actions');
+  const kind = assetData(record)?.kind;
+  const label = kind === 'land' ? 'Update value' : balanceKinds.has(kind) ? 'Update balance' : 'Edit';
+  group.append(action(label, () => editAsset(record), label + ' for ' + record.title),
+    action('Delete', () => removeRecord(record), 'Delete ' + record.title));
+  return group;
+}
+
+function currentValue(data) {
+  return data.kind === 'stock' ? (data.price === null ? null : data.shares * data.price) : data.amount;
+}
+
+function portfolioSummary(entries) {
+  const totals = Object.fromEntries(currencyCodes.map((code) => [code, { value: 0, cost: 0, gain: 0, count: 0, missing: 0, unpriced: 0 }]));
+  for (const { data } of entries) {
+    if (!data?.currency) continue;
+    const total = totals[data.currency];
+    const value = currentValue(data);
+    if (value === null) { total.unpriced++; continue; }
+    total.value += value;
+    if (data.kind !== 'stock') continue;
+    if (data.cost === null) {
+      total.missing++;
+      continue;
+    }
+    const cost = data.cost * data.shares;
+    total.count++;
+    total.cost += cost;
+    total.gain += value - cost;
+  }
+  return totals;
+}
+
+function signedMoney(code, amount) {
+  return (amount > 0 ? '+' : '') + money[code].format(amount);
+}
+
+function gainText(totals) {
+  const parts = currencyCodes.filter((code) => totals[code].count).map((code) => {
+    const { gain, cost } = totals[code];
+    return signedMoney(code, gain) + (cost ? ' (' + percent.format(gain / cost) + ')' : '');
+  });
+  const missing = currencyCodes.reduce((sum, code) => sum + totals[code].missing, 0);
+  const result = parts.length ? 'Unrealized stock gain/loss · ' + parts.join(' · ') : '';
+  return [result, missing ? missing + ' holding' + (missing === 1 ? '' : 's') + ' without cost basis' : ''].filter(Boolean).join(' · ');
+}
+
+function stockStats(value, daily, overall, units, currency) {
+  const stats = element('dl', undefined, 'stock-stats');
+  for (const [label, text, change] of [
+    ['Value', value === null ? '—' : money[currency].format(value)],
+    ['Daily change', daily === null ? '—' : percent.format(daily), daily],
+    ['Overall change', overall === null ? '—' : percent.format(overall), overall],
+    ['Units', quantity.format(units)]
+  ]) {
+    const stat = element('div');
+    const valueClass = change > 0 ? 'gain' : change < 0 ? 'loss' : undefined;
+    stat.append(element('dt', label), element('dd', text, valueClass));
+    stats.append(stat);
+  }
+  return stats;
+}
+
+function renderAllStocks(entries, brokerages) {
+  const names = new Map(brokerages.map(({ record }) => [record.id, record.title]));
+  const groups = new Map();
+  for (const entry of entries) {
+    const { record, data } = entry;
+    if (data?.kind !== 'stock') continue;
+    const key = data.symbol ? [data.symbol, data.exchange, data.currency].join('|') : record.id;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  }
+  const cards = [];
+  for (const positions of groups.values()) {
+    const first = positions[0];
+    const currency = first.data.currency;
+    let value = 0, units = 0, prior = 0, cost = 0;
+    let completeValue = true, completePrior = true, completeCost = true;
+    const byAccount = new Map();
+    for (const { data, quote } of positions) {
+      const current = currentValue(data);
+      units += data.shares;
+      if (current === null) completeValue = false;
+      else value += current;
+      if (!quote || !(data.previousPrice > 0)) completePrior = false;
+      else prior += data.shares * data.previousPrice;
+      if (data.cost === null) completeCost = false;
+      else cost += data.shares * data.cost;
+      const account = data.parent;
+      byAccount.set(account, (byAccount.get(account) ?? 0) + data.shares);
+    }
+    const card = element('article', undefined, 'stock-card');
+    const daily = completeValue && completePrior && prior > 0 ? (value - prior) / prior : null;
+    const overall = completeValue && completeCost && cost > 0 ? (value - cost) / cost : null;
+    card.append(element('h3', first.record.title), stockStats(completeValue ? value : null, daily, overall, units, currency));
+    const breakdown = element('details', undefined, 'position-breakdown');
+    const count = byAccount.size;
+    breakdown.append(element('summary', count === 1 ? '1 account' : count + ' accounts'));
+    for (const [id, shares] of byAccount) breakdown.append(element('p', (names.get(id) ?? 'Unassigned brokerage') + ' · ' + quantity.format(shares) + ' units'));
+    card.append(breakdown);
+    cards.push(card);
+  }
+  cards.sort((a, b) => a.firstElementChild.textContent.localeCompare(b.firstElementChild.textContent));
+  $('allStockRows').replaceChildren(...cards);
+  if (!cards.length) $('allStockRows').textContent = 'No stock holdings yet.';
+}
+
+function selectPortfolioTab(tab) {
+  const all = tab === 'allStocksTab';
+  $('accounts').hidden = all;
+  $('assetEditor').hidden = all;
+  $('allStocks').hidden = !all;
+  for (const id of ['accountsTab', 'allStocksTab']) {
+    $(id).setAttribute('aria-selected', String(id === tab));
+    $(id).tabIndex = id === tab ? 0 : -1;
+  }
+}
+
+for (const id of ['accountsTab', 'allStocksTab']) {
+  $(id).addEventListener('click', () => selectPortfolioTab(id));
+  $(id).addEventListener('keydown', (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 'accountsTab' : event.key === 'End' ? 'allStocksTab' :
+      id === 'accountsTab' ? 'allStocksTab' : 'accountsTab';
+    selectPortfolioTab(next);
+    $(next).focus();
+  });
+}
+
+function assetCard({ record, data, quote }) {
+  const card = element('article');
+  card.append(element('h3', record.title));
+  if (data?.kind === 'stock') {
+    card.className = 'stock-card';
+    const value = currentValue(data);
+    const daily = quote && value !== null && data.previousPrice > 0
+      ? (data.price - data.previousPrice) / data.previousPrice : null;
+    const overall = value !== null && data.cost > 0 ? (data.price - data.cost) / data.cost : null;
+    card.append(stockStats(value, daily, overall, data.shares, data.currency));
+  } else if (data?.currency) {
+    const land = data.kind === 'land';
+    card.append(element('p', (land ? 'Value updated ' : 'Balance updated ') + day(record.updatedAt), 'hint'));
+    card.append(element('p', (land ? 'Estimated value' : 'Balance') + ' · ' + money[data.currency].format(currentValue(data))));
+  } else {
+    card.append(element('p', record.notes));
+  }
+  card.append(recordActions(record));
+  return card;
+}
+
+function brokerageCard({ record }, holdings) {
+  const card = element('details', undefined, 'brokerage');
+  const totals = portfolioSummary(holdings);
+  const balances = currencyCodes.map((code) => money[code].format(totals[code].value)).join(' · ');
+  const unpriced = totals.ILS.unpriced + totals.USD.unpriced;
+  card.append(element('summary', record.title + ' · ' + balances + (unpriced ? ' · Partial' : '')));
+  const gains = gainText(totals);
+  if (gains) card.append(element('p', gains, 'hint'));
+  const group = recordActions(record);
+  group.prepend(action('Add stock or ETF', () => editAsset(null, 'stock', record.id)),
+    action('Add cash', () => editAsset(null, 'cash', record.id)));
+  card.append(group, ...holdings.map(assetCard));
+  card.open = openBrokers.has(record.id);
+  card.addEventListener('toggle', () => {
+    if (card.open) openBrokers.add(record.id);
+    else openBrokers.delete(record.id);
+  });
+  return card;
+}
+
+function renderAssets() {
+  const market = getMarketData(active.records);
+  const all = active.records.filter((record) => !record.deleted).map((record) => {
+    const data = assetData(record);
+    const quote = data?.kind === 'stock' && quotesFor(data, market);
+    if (!quote) return { record, data };
+    const prior = quote.closes.findLast(([date]) => date < quote.date)?.[1];
+    return { record, data: { ...data, price: quote.quote, previousPrice: prior }, quote };
+  });
+  const brokerages = all.filter(({ data }) => data?.kind === 'brokerage');
+  const ids = new Set(brokerages.map(({ record }) => record.id));
+  const eligible = all.filter(({ data }) => !['rate', 'market', 'snapshot', 'portfolio-history'].includes(data?.kind));
+  const totals = portfolioSummary(eligible);
+  const manualRate = all.find(({ record, data }) => record.id === rateId && data?.kind === 'rate')?.data.rate;
+  const marketRate = market.get(listingKey(fxListing));
+  const rate = marketRate?.quote || manualRate;
+  $('fxStatus').textContent = marketRate?.quote ? 'USD/ILS · ' + marketRate.quote + ' · ' + marketRate.date :
+    manualRate ? 'USD/ILS · Manual rate' : '';
+  const ils = totals.ILS.value;
+  const usd = totals.USD.value;
+  $('totalILS').textContent = rate ? money.ILS.format(ils + usd * rate) : '—';
+  $('totalUSD').textContent = rate ? money.USD.format(usd + ils / rate) : '—';
+  $('nativeTotals').textContent = 'By currency · ' + money.ILS.format(ils) + ' · ' + money.USD.format(usd) +
+    (rate ? '' : ' · Add an exchange rate for combined totals.') +
+    (totals.ILS.unpriced + totals.USD.unpriced ? ' · Partial totals. Some holdings have no quote.' : '');
+  $('gainTotals').textContent = gainText(totals);
+  $('rate').value = manualRate ?? '';
+  const groups = new Map([
+    ['bank', ['Bank accounts', []]],
+    ['brokerage', ['Brokerage accounts', []]],
+    ['pension', ['Pension funds', []]],
+    ['education', ['Education funds', []]],
+    ['land', ['Land investments', []]],
+    ['other', ['Other assets', []]]
+  ]);
+  for (const entry of eligible) {
+    const kind = entry.data?.kind;
+    if (kind === 'brokerage') {
+      const card = brokerageCard(entry, eligible.filter(({ data }) => data?.parent === entry.record.id));
+      groups.get('brokerage')[1].push(card);
+      continue;
+    }
+    if (ids.has(entry.data?.parent)) continue;
+    const card = assetCard(entry);
+    if (entry.data?.parent) card.append(element('p', 'Brokerage unavailable. Edit this asset to assign an account.', 'hint'));
+    (groups.get(kind) || groups.get('other'))[1].push(card);
+  }
+  const sections = [];
+  for (const [kind, [label, cards]] of groups) {
+    if (!cards.length) continue;
+    const group = element('div', undefined, 'asset-category');
+    group.dataset.category = kind;
+    const heading = element('h3', label);
+    heading.append(element('span', String(cards.length), 'category-count'));
+    group.append(heading, ...cards);
+    sections.push(group);
+  }
+  $('records').replaceChildren(...sections);
+  if (!sections.length) $('records').textContent = 'No assets yet.';
+  renderAllStocks(eligible, brokerages);
+  syncEditor();
+  renderHistory(market);
+}
+
+function showWorkspace() {
+  $('gate').hidden = Boolean(active) || (!candidate && !canCreate);
+  $('workspace').hidden = !active;
+  $('gateTitle').textContent = candidate ? 'Unlock vault' : 'Create a vault';
+  $('unlockButton').textContent = candidate ? 'Unlock' : 'Create vault';
+  $('repeatLabel').hidden = Boolean(candidate);
+  $('repeat').required = !candidate;
+  $('password').autocomplete = candidate ? 'current-password' : 'new-password';
+  $('strength').hidden = Boolean(candidate);
+  $('repo').readOnly = Boolean(active);
+  $('branch').readOnly = Boolean(active);
+  if (!active) {
+    $('records').replaceChildren();
+    for (const id of ['totalILS', 'totalUSD', 'nativeTotals', 'gainTotals']) $(id).textContent = '';
+    $('rateForm').reset();
+    clearEditor();
+    $('rotate').reset();
+    $('unlock').reset();
+    return;
+  }
+  renderAssets();
+}
+
+async function load() {
+  candidate = null;
+  canCreate = false;
+  $('source').textContent = '';
+  let local;
+  let localError;
+  try { local = readCache(); } catch (error) { localError = error; }
+  let remote;
+  let remoteError;
+  if (!forceNew) {
+    try { remote = await getRemote(); } catch (error) { remoteError = error; }
+  }
+  if (forceNew) {
+    canCreate = true;
+    $('source').textContent = 'Create a fresh vault on this device.';
+  } else if (local?.pending) {
+    candidate = { envelope: local.envelope, pending: true, remote };
+    $('source').textContent = 'Opening unsynced changes from this device.';
+  } else if (remote) {
+    candidate = { envelope: remote.envelope, pending: false };
+    $('source').textContent = 'Opening the remote vault.';
+  } else if (local) {
+    candidate = { envelope: local.envelope, pending: false };
+    $('source').textContent = 'Opening the encrypted device copy.';
+  } else if (!remoteError && !localError) {
+    canCreate = true;
+  }
+  const error = remoteError || localError;
+  status(error ? error.message : '', Boolean(error));
+  showWorkspace();
+}
+
+async function unlock(password, repeated) {
+  const selected = candidate;
+  if (!selected && !canCreate) throw new Error('Reload the vault first.');
+  if (!selected) checkPassphrase(password, repeated);
+  const parameters = selected ? parametersOf(selected.envelope) : newParameters();
+  const key = await derive(password, parameters);
+  let records = selected ? await openEnvelope(selected.envelope, key) : [];
+  let envelope = selected?.envelope;
+  let mergeIssue = '';
+  if (selected?.remote) {
+    try {
+      if (selected.remote.envelope.salt !== parameters.salt || selected.remote.envelope.iter !== parameters.iter) {
+        throw new Error('GitHub has a different vault or a changed passphrase. Export your unsynced records before clearing this device copy.');
+      }
+      const merged = merge(records, await openEnvelope(selected.remote.envelope, key));
+      envelope = await seal(merged, key, parameters);
+      records = merged;
+    } catch (error) {
+      mergeIssue = error.message;
+    }
+  }
+  if (!envelope) envelope = await seal(records, key, parameters);
+  cache(envelope, selected?.pending ?? true);
+  active = { key, parameters, envelope, records };
+  observeTimes(records);
+  showWorkspace();
+  status(mergeIssue || (selected ? 'Vault unlocked.' : 'Vault created. Add an asset or use Sync now.'), Boolean(mergeIssue));
+}
+
+async function save(records, afterCache = () => {}) {
+  records = await withHistory(records, active.records);
+  const envelope = await seal(records, active.key, active.parameters);
+  cache(envelope, true);
+  active = { ...active, records, envelope };
+  afterCache();
+  showWorkspace();
+  if (!repo || !token) {
+    status((storageBlocked ? 'Encrypted in memory.' : 'Saved on this device.') +
+      ' Set a GitHub token and use Sync now to commit.');
+    return;
+  }
+  try {
+    active = await syncRecords(records);
+    cache(active.envelope, false);
+    status('Synced to GitHub.');
+  } catch (error) {
+    status((storageBlocked ? 'Kept in memory. ' : 'Kept on this device. ') + error.message, true);
+  }
+  showWorkspace();
+}
+
+async function rotate(oldPassword, password, repeated) {
+  checkPassphrase(password, repeated);
+  if (oldPassword === password) throw new Error('Choose a different passphrase.');
+  const oldKey = await derive(oldPassword, active.parameters);
+  await openEnvelope(active.envelope, oldKey);
+  const parameters = newParameters();
+  const key = await derive(password, parameters);
+  if (repo) {
+    if (!token) throw new Error('Apply a GitHub token before changing the passphrase.');
+    active = await syncRecords(active.records, key, parameters, true);
+    cache(active.envelope, false);
+  } else {
+    if (await getRemote()) throw new Error('Connect to the GitHub repository before changing the passphrase for a published vault.');
+    const envelope = await seal(active.records, key, parameters);
+    cache(envelope, true);
+    active = { ...active, key, parameters, envelope };
+  }
+  observeTimes(active.records);
+  showWorkspace();
+  status(repo ? 'Passphrase changed and synced.' :
+    (storageBlocked ? 'Passphrase changed in memory.' : 'Passphrase changed on this device.'));
+}
+
+function removeRecord(record) {
+  perform(async () => {
+    if (assetData(record)?.kind === 'brokerage' && active.records.some((item) => assetData(item)?.parent === record.id)) {
+      throw new Error('Move or remove the cash and holdings before deleting this brokerage.');
+    }
+    const tombstone = { id: record.id, updatedAt: recordTime(), deleted: true };
+    await save(merge(active.records, [tombstone]), () => {
+      if (editing === record.id) clearEditor();
+    });
+  });
+}
+
+const csvHeader = 'title,notes';
+const protectedHeader = 'title,notes,record_vault_csv_v1';
+
+function csvCell(value) {
+  // Pair formula shielding with the importer so our own backups round-trip.
+  if (/^(?:'|\s*[=+@-]|[\t\r\n])/.test(value)) value = "'" + value;
+  return '"' + value.replaceAll('"', '""') + '"';
+}
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let quoted = false;
+  let closed = false;
+  let started = false;
+  function finishCell() {
+    row.push(cell);
+    cell = '';
+    closed = false;
+    started = false;
+  }
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (char === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (char === '"') { quoted = false; closed = true; }
+      else cell += char;
+    } else if (char === ',') {
+      finishCell();
+    } else if (char === '\r' || char === '\n') {
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      finishCell();
+      rows.push(row);
+      row = [];
+    } else if (char === '"' && !started && !closed) {
+      quoted = true;
+      started = true;
+    } else {
+      if (closed || char === '"') throw new FormatError('Invalid CSV quoting.');
+      started = true;
+      cell += char;
+    }
+  }
+  if (quoted) throw new FormatError('Unclosed CSV quote.');
+  if (started || closed || row.length) {
+    finishCell();
+    rows.push(row);
+  }
+  const head = rows.shift();
+  const protectedBackup = head?.length === 3 && head.join(',') === protectedHeader;
+  if (!protectedBackup && (head?.length !== 2 || head.join(',').toLowerCase() !== csvHeader)) {
+    throw new FormatError('CSV must start with title,notes.');
+  }
+  return rows.map((fields) => {
+    if (fields.length !== (protectedBackup ? 3 : 2)) throw new FormatError('CSV row does not match the header.');
+    const [title, notes] = protectedBackup ? fields.slice(0, 2).map((value) => value.replace(/^'/, '')) : fields;
+    return { title, notes };
+  });
+}
+
+function backup(format) {
+  const records = active.records.filter((record) => !record.deleted).map((record) => {
+    const data = assetData(record);
+    const notes = (data?.kind === 'brokerage' || trackable(data)) ? assetPrefix + JSON.stringify({ ...data, backupId: record.id }) : record.notes;
+    return { title: record.title, notes };
+  });
+  const content = format === 'json' ? JSON.stringify(records, null, 2) :
+    [protectedHeader, ...records.map(({ title, notes }) => [title, notes].map(csvCell).join(',') + ',')].join('\r\n');
+  const url = URL.createObjectURL(new Blob([content], { type: format === 'json' ? 'application/json' : 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'vault-backup.' + format;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+async function importBackup(file) {
+  if (file.size > maxEnvelope) throw new Error('Backup file exceeds the supported size.');
+  const text = (await file.text()).replace(/^\uFEFF/, '');
+  const records = /\.csv$/i.test(file.name) ? parseCSV(text) : parseJSON(text, 'Backup');
+  if (!Array.isArray(records) || records.some((record) => !validFields(record?.title, record?.notes))) {
+    throw new FormatError('Invalid backup. Provide a CSV with title and notes columns or a JSON array of {title, notes} records.');
+  }
+  if (!records.length) { status('No records to import.'); return; }
+  const brokerIDs = new Map();
+  const entries = await Promise.all(records.map(async (record) => {
+    const data = assetData(record);
+    let id = data?.kind === 'rate' ? rateId : crypto.randomUUID();
+    if (data?.kind === 'portfolio-history') id = await namedId('imported-portfolio-history:' + data.date);
+    if (data?.kind === 'market') id = await namedId('market:' + listingKey(data.listing));
+    if ((data?.kind === 'brokerage' || trackable(data)) && typeof data.backupId === 'string') {
+      if (brokerIDs.has(data.backupId)) throw new FormatError('Duplicate brokerage in backup.');
+      brokerIDs.set(data.backupId, id);
+    }
+    return { id, record, data };
+  }));
+  const additions = await Promise.all(entries.map(async ({ id, record, data }) => {
+    if (!data) return { ...record, id, updatedAt: recordTime(), deleted: false };
+    if (data.kind === 'brokerage') return assetRecord(id, record.title, { kind: 'brokerage', parent: null });
+    if (data.parent && brokerIDs.has(data.parent)) data.parent = brokerIDs.get(data.parent);
+    if (data.kind === 'snapshot') {
+      if (brokerIDs.has(data.assetId)) data.assetId = brokerIDs.get(data.assetId);
+      id = await namedId('asset-history:' + data.assetId + ':' + data.date);
+    }
+    delete data.backupId;
+    return assetRecord(id, record.title, data);
+  }));
+  const imported = new Map();
+  for (const record of additions) imported.set(record.id, record);
+  const combined = merge(active.records, [...imported.values()]);
+  await save(combined);
+}
+
+async function perform(operation) {
+  if ($('controls').disabled || !globalThis.crypto?.subtle) return;
+  $('controls').disabled = true;
+  status('Working…');
+  try { await operation(); }
+  catch (error) { status(error.message || 'Unexpected error.', true); }
+  finally { $('controls').disabled = false; }
+}
+
+function submit(id, handler) {
+  $(id).addEventListener('submit', (event) => {
+    event.preventDefault();
+    perform(handler);
+  });
+}
+
+submit('unlock', async () => {
+  const password = $('password').value;
+  const repeated = $('repeat').value;
+  $('unlock').reset();
+  await unlock(password, repeated);
+  setTimeout(queueMarketRefresh, 0);
+});
+$('kind').addEventListener('change', syncEditor);
+$('symbol').addEventListener('input', () => { $('price').required = !$('symbol').value.trim(); });
+$('parent').addEventListener('change', syncEditor);
+submit('editor', async () => {
+  const title = $('title').value.trim();
+  if (!title) throw new Error('Enter an asset name.');
+  const id = editing || crypto.randomUUID();
+  const kind = $('kind').value;
+  const parent = $('parent').value || null;
+  const currency = $('currency').value;
+  let record;
+  if (kind === 'note') {
+    const notes = $('notes').value;
+    record = { id, title, notes, updatedAt: recordTime(), deleted: false };
+    assetData(record);
+  } else {
+    let data = { kind, parent: kind === 'cash' || kind === 'stock' ? parent : null };
+    if (kind === 'stock') {
+      if (!parent) throw new Error('Choose a brokerage for this holding.');
+      data = { ...data, currency, shares: $('shares').valueAsNumber, price: $('price').value === '' ? null : $('price').valueAsNumber,
+        cost: $('cost').value === '' ? null : $('cost').valueAsNumber };
+      const symbol = $('symbol').value.trim().toUpperCase();
+      if (symbol) data = { ...data, symbol, exchange: $('exchange').value.trim().toUpperCase(),
+        divisor: Number($('quoteUnit').value) };
+      const existing = editing && active.records.find((item) => item.id === editing);
+      const previous = existing && assetData(existing);
+      if (previous?.kind === 'stock' && previous.currency === currency && existing.title === title) {
+        const previousPrice = previous.price === data.price ? previous.previousPrice : previous.price;
+        if (previousPrice != null && data.price !== null) data.previousPrice = previousPrice;
+      }
+    }
+    if (balanceKinds.has(kind)) data = { ...data, currency, amount: $('amount').valueAsNumber };
+    record = assetRecord(id, title, data);
+  }
+  if (parent) openBrokers.add(parent);
+  if (kind === 'brokerage') openBrokers.add(id);
+  const data = assetData(record);
+  const listing = data?.kind === 'stock' && listingFor(data);
+  const needsQuote = listing && !getMarketData(active.records).has(listingKey(listing));
+  await save(merge(active.records, [record]), clearEditor);
+  if (needsQuote && marketToken) {
+    lastMarketAttempt = 0;
+    setTimeout(queueMarketRefresh, 0);
+  }
+});
+submit('rateForm', async () => {
+  const record = assetRecord(rateId, 'USD to ILS exchange rate', { kind: 'rate', rate: $('rate').valueAsNumber });
+  await save(merge(active.records, [record]));
+});
+submit('rotate', async () => {
+  const old = $('old').value;
+  const next = $('next').value;
+  const repeated = $('nextRepeat').value;
+  $('rotate').reset();
+  await rotate(old, next, repeated);
+});
+submit('connection', async () => {
+  const nextRepo = $('repo').value.trim();
+  const nextBranch = $('branch').value.trim();
+  if (!nextBranch || (nextRepo && !/^[\w.-]+\/[\w.-]+$/.test(nextRepo))) {
+    throw new Error('Enter an owner/repo and branch.');
+  }
+  const enteredToken = $('token').value.trim();
+  $('token').value = '';
+  const changed = nextRepo !== repo || nextBranch !== branch;
+  if (changed) {
+    if (active) throw new Error('Lock the vault before changing the repository or branch.');
+    token = '';
+    forceNew = false;
+  }
+  if (enteredToken) token = enteredToken;
+  repo = nextRepo;
+  branch = nextBranch;
+  writeLocal(configKey, JSON.stringify({ repo, branch }));
+  if (!active) await load();
+  else status(token ? 'GitHub token ready for this tab.' : 'Enter a token to enable GitHub writes.');
+});
+submit('marketForm', async () => {
+  const key = $('marketKey').value.trim();
+  $('marketKey').value = '';
+  if (key) marketToken = key;
+  await refreshMarket();
+});
+$('refreshMarket').addEventListener('click', () => perform(refreshMarket));
+$('forgetMarket').addEventListener('click', () => {
+  marketToken = '';
+  lastMarketAttempt = 0;
+  $('marketStatus').textContent = 'Disconnected. Saved quotes are still shown.';
+});
+$('historyAsset').addEventListener('change', () => renderHistory(getMarketData(active.records)));
+window.addEventListener('focus', queueMarketRefresh);
+document.addEventListener('visibilitychange', queueMarketRefresh);
+setInterval(queueMarketRefresh, 60_000);
+$('forget').addEventListener('click', () => {
+  token = '';
+  $('token').value = '';
+  status('GitHub token cleared.');
+});
+$('import').addEventListener('change', () => {
+  const file = $('import').files[0];
+  $('import').value = '';
+  if (file) perform(() => importBackup(file));
+});
+$('csv').addEventListener('click', () => backup('csv'));
+$('json').addEventListener('click', () => backup('json'));
+$('retry').addEventListener('click', () => perform(async () => {
+  forceNew = false;
+  await load();
+}));
+$('cancelEdit').addEventListener('click', clearEditor);
+$('sync').addEventListener('click', () => perform(async () => {
+  if (!repo || !token) throw new Error('Apply a GitHub connection and token to sync.');
+  await save(active.records);
+}));
+$('lock').addEventListener('click', () => perform(async () => {
+  active = null;
+  forceNew = false;
+  showWorkspace();
+  await load();
+}));
+function armReset(armed) {
+  resetArmed = armed;
+  $('reset').textContent = armed ? 'Clear device copy and start fresh' : 'Start over on this device';
+  $('cancelReset').hidden = !armed;
+}
+$('cancelReset').addEventListener('click', () => armReset(false));
+$('reset').addEventListener('click', () => {
+  if (!resetArmed) { armReset(true); return; }
+  perform(async () => {
+    armReset(false);
+    active = null;
+    forceNew = true;
+    writeLocal(cacheKey(), null);
+    await load();
+  });
+});
+
+if (!globalThis.crypto?.subtle) {
+  status('Web Crypto is unavailable. Open this page on HTTPS or localhost in a browser that supports Web Crypto.', true);
+  $('controls').disabled = true;
+} else {
+  const config = readLocal(configKey);
+  if (config) {
+    try {
+      const parsed = JSON.parse(config);
+      if (typeof parsed.repo === 'string' && typeof parsed.branch === 'string') {
+        repo = parsed.repo;
+        branch = parsed.branch;
+      }
+    } catch { /* The connection can be re-entered if its settings are corrupt. */ }
+  }
+  $('repo').value = repo;
+  $('branch').value = branch;
+  perform(load);
+}
+</script>
+</body>
+</html>
