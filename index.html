@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-XQ1z5h6aYtArwpz3qPFDu6B0D4LVUPtVE4CAp8vcKYo='; style-src 'sha256-0nBbaDCpdFZp2UmuAGH0mvpUxEJtmrYhUOi6I2wNUWU='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-QRftiyBcE2zcq114jeVkmmEWYHq3LLpInJuO5Cc2a4k='; style-src 'sha256-0nBbaDCpdFZp2UmuAGH0mvpUxEJtmrYhUOi6I2wNUWU='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Asset Vault</title>
 <style>
 :root { color-scheme: light; font: 16px/1.55 system-ui, sans-serif; color: #242722; background: #f4f4ed; --ink: #234d3e; --line: #d5d9ce; }
@@ -1199,7 +1199,41 @@ submit('classForm', async () => {
 
 const defaultClass = { bank: 'cash', cash: 'cash', savings: 'savings', stock: 'stock',
   pension: 'pension', education: 'education', land: 'land', reported: 'reported' };
-const chartColors = ['#166d61','#365a99','#a85336','#755091','#767323','#b24560','#007692','#687881','#a96c1c','#5358a9'];
+const families = {
+  education: ['#F9BFCD','#F4829D','#EF476F','#AC3350'],
+  land: ['#FCD7CB','#FAB19A','#F78C6B','#B2654D'],
+  savings: ['#FFEFC9','#FFE097','#FFD166','#B89649'],
+  pension: ['#A8F1DE','#56E3BE','#06D6A0','#049A73'],
+  reported: ['#ACD6E4','#5DAFCB','#118AB2','#0C6380'],
+  cash: ['#A8BAC0','#567A85','#073B4C','#052A37']
+};
+const chartColors = Object.values(families).map((shades) => shades[2]);
+const assetColors = new Map();
+function familyFor(key) {
+  if (Object.hasOwn(families, key)) return families[key];
+  const index = Array.from(key).reduce((hash, letter) => (hash * 31 + letter.charCodeAt(0)) >>> 0, 0);
+  const available = Object.values(families);
+  return available[index % available.length];
+}
+
+function paletteFor(history, current) {
+  assetColors.clear();
+  const assignments = new Map();
+  for (const [id, entries] of history) {
+    for (const {state} of entries) {
+      if (state?.currency) assignments.set(id, state.assetClass || defaultClass[state.kind] || 'other');
+    }
+  }
+  for (const [id, state] of current) {
+    if (state.currency) assignments.set(id, state.assetClass || defaultClass[state.kind] || 'other');
+  }
+  const counts = new Map();
+  for (const [id, key] of assignments) {
+    const index = counts.get(key) ?? 0;
+    assetColors.set(id, familyFor(key)[[2, 1, 3, 0][index % 4]]);
+    counts.set(key, index + 1);
+  }
+}
 const chartDate = new Intl.DateTimeFormat('en', {year:'numeric',month:'short', timeZone:'UTC'});
 const shortILS = new Intl.NumberFormat('en', {notation:'compact', maximumFractionDigits:1});
 
@@ -1254,7 +1288,8 @@ function valuedGroups(positions, names, mode, market, rate, date, classLabels) {
     }
     const [key, label] = chartMetadata(id, state, names, mode, classLabels);
     const value = state.currency === 'USD' ? amount * (rate || 0) : amount;
-    const group = groups.get(key) || {label, value:0};
+    const color = mode === 'classes' ? familyFor(key)[2] : assetColors.get(id);
+    const group = groups.get(key) || {label, value:0, color};
     group.value += value;
     groups.set(key, group);
   }
@@ -1272,7 +1307,7 @@ function allocationChart(target, result) {
     let offset = 0;
     const items = positive.map((item, index) => {
       const share = item.value / total;
-      const color = chartColors[index % chartColors.length];
+      const color = item.color || chartColors[index % chartColors.length];
       const wedge = svgNode('circle', {cx:70,cy:70,r:49,fill:'none',stroke:color,'stroke-width':34,
         pathLength:100,'stroke-dasharray':(share*100)+' 100','stroke-dashoffset':-offset,transform:'rotate(-90 70 70)'});
       wedge.append(svgNode('title', {}, item.label + ' · ' + money.ILS.format(item.value)));
@@ -1349,16 +1384,16 @@ function historyChart(rows, breakdown, from, to) {
     return;
   }
   const keys = new Map();
-  for (const {groups} of rows) for (const [id, {label}] of groups) keys.set(id,label);
+  for (const {groups} of rows) for (const [id, {label, color}] of groups) keys.set(id,{label,color});
   const start = Date.parse(from);
   const span = Date.parse(to) - start;
   const positive = rows.map(() => 0);
   const negative = rows.map(() => 0);
   const layers = [];
-  for (const [key,label] of keys) {
+  for (const [key,{label,color:assigned}] of keys) {
     const values = rows.map(({groups}) => groups.get(key)?.value ?? 0);
     if (!values.some(Boolean)) continue;
-    const color = chartColors[layers.length % chartColors.length];
+    const color = assigned || chartColors[layers.length % chartColors.length];
     const sides = [positive,negative].map((base,index) => values.map((value,i) => {
       const from = base[i];
       base[i] += index === 0 ? Math.max(value,0) : Math.min(value,0);
@@ -1418,6 +1453,7 @@ function renderCharts() {
   const rate = fx?.quote || manualRate;
   const classLabels = classNames();
   renderClassManager(classLabels);
+  paletteFor(history, current);
   allocationChart($('assetPie'), valuedGroups(current,titles,'assets',market,rate,undefined,classLabels));
   allocationChart($('classPie'), valuedGroups(current,titles,'classes',market,rate,undefined,classLabels));
   const selector = $('chartBreakdown');
