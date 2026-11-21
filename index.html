@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-u50TrBuJ15vzLR04kTW300JzZ2I3Qw3QMbjH0xmq4lY='; style-src 'sha256-t1tSWyd4UdeXqrTVutYTjHfwM3h2qKhRz0XcGAw/sAI='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-7gpOCiV/wVoSRn4WoDP7H05HiyjdrzPV09eJuL2jfXw='; style-src 'sha256-t1tSWyd4UdeXqrTVutYTjHfwM3h2qKhRz0XcGAw/sAI='; connect-src 'self' https://api.github.com https://api.twelvedata.com; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Asset Vault</title>
 <style>
 :root { color-scheme: light; font: 16px/1.55 system-ui, sans-serif; color: #242722; background: #f4f4ed; --ink: #234d3e; --line: #d5d9ce; }
@@ -177,6 +177,7 @@ th:first-child, td:first-child { text-align: left; }
 <p class="hint">CSV and JSON backups contain readable records. Keep them private and outside the public repo. Import can add accounts, holdings, or dated portfolio snapshots. An imported exchange rate replaces the current rate.</p>
 <div class="actions"><button id="json" type="button">Export JSON</button><button id="csv" type="button">Export CSV</button></div>
 <label>Import CSV or JSON <input id="import" type="file" accept=".csv,.json,text/csv,application/json"></label>
+<p id="importStatus" role="status" aria-live="polite"></p>
 <form id="rotate">
 <label>Old passphrase <input id="old" required type="password" autocomplete="current-password" maxlength="1024"></label>
 <label>New passphrase <input id="next" required type="password" autocomplete="new-password" maxlength="1024"></label>
@@ -1500,6 +1501,7 @@ function showWorkspace() {
     $('classToManage').replaceChildren();
     $('className').value = '';
     $('classStatus').textContent = '';
+    $('importStatus').textContent = '';
     selectPortfolioTab('accountsTab');
     for (const id of ['totalILS', 'totalUSD', 'nativeTotals', 'gainTotals']) $(id).textContent = '';
     $('rateForm').reset();
@@ -1718,7 +1720,7 @@ async function importBackup(file) {
   if (!Array.isArray(records) || records.some((record) => !validFields(record?.title, record?.notes))) {
     throw new FormatError('Invalid backup. Provide a CSV with title and notes columns or a JSON array of {title, notes} records.');
   }
-  if (!records.length) { status('No records to import.'); return; }
+  if (!records.length) return 'The file contains no records.';
   const brokerIDs = new Map();
   const entries = await Promise.all(records.map(async (record) => {
     const data = assetData(record);
@@ -1755,8 +1757,14 @@ async function importBackup(file) {
   }));
   const imported = new Map();
   for (const record of additions.filter(Boolean)) imported.set(record.id, record);
+  if (!imported.size) return 'These records are already in your vault. Check Accounts or Daily history.';
   const combined = merge(active.records, [...imported.values()]);
   await save(combined);
+  const assets = entries.filter(({data}) => balanceKinds.has(data?.kind) || data?.kind === 'stock').length;
+  const archive = entries.some(({data}) => data?.kind === 'portfolio-history');
+  const detail = assets ? 'Asset records found: ' + assets + '. See Accounts.' :
+    archive ? 'This file contains portfolio totals. See Daily history → Imported portfolio history.' : '';
+  return ['Imported ' + imported.size + ' records.', detail, $('status').textContent].filter(Boolean).join(' ');
 }
 
 async function perform(operation) {
@@ -1884,7 +1892,16 @@ $('forget').addEventListener('click', () => {
 $('import').addEventListener('change', () => {
   const file = $('import').files[0];
   $('import').value = '';
-  if (file) perform(() => importBackup(file));
+  if (file) perform(async () => {
+    const feedback = $('importStatus');
+    feedback.textContent = 'Importing ' + file.name + '…';
+    try {
+      feedback.textContent = await importBackup(file);
+    } catch (error) {
+      feedback.textContent = 'Import failed. ' + (error.message || 'Unexpected error.');
+      throw error;
+    }
+  });
 });
 $('csv').addEventListener('click', () => backup('csv'));
 $('json').addEventListener('click', () => backup('json'));
